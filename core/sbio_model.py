@@ -81,8 +81,8 @@ class SbioModel:
         return f"addspecies({comp},{_ml_str(name)},{_ml_num(amount)});"
 
     def add_reaction_cmd(self, name, equation):
-        return (f"r=addreaction({self.var},{_ml_str(equation)}); "
-                f"r.Name={_ml_str(name)};")
+        return (f"set(addreaction({self.var},{_ml_str(equation)}),"
+                f"'Name',{_ml_str(name)});")
 
     def add_compartment_cmd(self, name):
         return f"addcompartment({self.var},{_ml_str(name)});"

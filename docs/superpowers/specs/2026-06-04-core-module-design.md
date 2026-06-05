@@ -110,8 +110,22 @@ reads / builders against that real round-trip. No shipped fixtures, no mocks.
 - No simulation logic in core (simulation is a tool that calls `sbiosimulate` via `service.execute`).
 - Builders cover only the MVP element-adds. Adding more later mirrors "adding a tool is easy."
 
-## Open items / to confirm against live engine
+## Resolved against the live engine (R2025b)
 
-- Exact form of project load + model discovery (POC-proven path; may simplify to a struct-return
-  form of `sbioloadproject` if available in R2025b).
-- Field names for `get_*` details (`InitialAmount`, `Capacity`, etc.) verified against R2025b.
+- Model discovery: `sbioreset;` (clean session) then `sbioloadproject`, enumerating
+  `sbioroot().Models` (parentheses required after the function call before dot-indexing) and binding
+  each model to a workspace var `sbio_model_<i>`. The earlier `whos` + class-filter idea was dropped
+  as less robust through the engine's eval path.
+- `get_*` detail field names verified: species `Value`/`InitialAmountUnits`/`Parent.Name`,
+  compartment `Capacity`/`CapacityUnits`, parameter `Value`/`ValueUnits`, reaction
+  `Reaction`/`Reversible`.
+- Engine eval constraints baked into the code: multi-statement strings only with `nargout=0`; value
+  returns need a single expression; MATLAB variable names must not start with an underscore.
+
+## Known limitations (MVP)
+
+- Element lookups assume a unique name. If two elements share a name (e.g. the same species name in
+  two compartments), `sbioselect` returns multiple matches and `get_*` would not return one clean
+  dict. Not handled in MVP.
+- A loaded project that contains zero models makes `get_model` raise `ProjectNotLoadedError` (the
+  `not self._models` guard) even though a project did load. Accepted for MVP.

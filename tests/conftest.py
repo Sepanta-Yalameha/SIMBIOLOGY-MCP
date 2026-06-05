@@ -22,3 +22,15 @@ def sample_project(tmp_path_factory):
       "r.Name='glycolysis';")
     e(f"sbiosaveproject('{path}','m');")
     return path
+
+
+@pytest.fixture(scope="session")
+def two_model_project(tmp_path_factory):
+    """A project containing two models, for the ambiguous get_model() branch."""
+    path = str(tmp_path_factory.mktemp("proj2") / "two.sbproj")
+    e = MatlabLayer.execute
+    e("sbioreset;")
+    e("m1=sbiomodel('demo'); addcompartment(m1,'cell'); "
+      "m2=sbiomodel('demo2'); addcompartment(m2,'cell');")
+    e(f"sbiosaveproject('{path}','m1','m2');")
+    return path

@@ -71,3 +71,72 @@ def test_add_species_via_builder_and_persist(sample_project, tmp_path):
     reloaded = SbioService()
     reloaded.load_project(out)
     assert "atp" in reloaded.get_model().species()
+
+def test_add_reaction_via_builder(sample_project):
+    svc = _loaded(sample_project)
+    m = svc.get_model()
+    svc.execute(m.add_reaction_cmd("newrx", "glucose -> atp"))
+    assert "newrx" in m.reactions()
+
+def test_save_default_path_overwrites(sample_project, tmp_path):
+    copy = str(tmp_path / "copy.sbproj")
+    _loaded(sample_project).save_project(copy)        # make a copy at a new path
+    svc = SbioService()
+    svc.load_project(copy)
+    svc.execute(svc.get_model().add_compartment_cmd("nucleus"))
+    svc.save_project()                                # no arg -> overwrites copy
+    again = SbioService()
+    again.load_project(copy)
+    assert "nucleus" in again.get_model().compartments()
+
+
+# --- error contract ---
+def test_load_bad_path_raises(tmp_path):
+    with pytest.raises(ProjectNotLoadedError):
+        SbioService().load_project(str(tmp_path / "does_not_exist.sbproj"))
+
+
+# --- detail variants ---
+def test_get_reaction_detail(sample_project):
+    m = _loaded(sample_project).get_model()
+    assert m.get_reaction("glycolysis") == {
+        "Name": "glycolysis", "Reaction": "glucose -> lactate", "Reversible": False}
+
+def test_get_compartment_detail(sample_project):
+    m = _loaded(sample_project).get_model()
+    assert m.get_compartment("cell") == {"Name": "cell", "Capacity": 1.0, "Units": ""}
+
+def test_get_parameter_detail(sample_project):
+    m = _loaded(sample_project).get_model()
+    assert m.get_parameter("k1") == {"Name": "k1", "Value": 1.5, "Units": ""}
+
+def test_get_parameter_unknown_raises(sample_project):
+    with pytest.raises(ElementNotFoundError):
+        _loaded(sample_project).get_model().get_parameter("nope")
+
+
+# --- builder string formats (pure, no execution) ---
+def test_builder_string_formats(sample_project):
+    m = _loaded(sample_project).get_model()
+    assert m.add_species_cmd("cell", "atp", 5) == (
+        f"addspecies(sbioselect({m.var},'Type','compartment','Name','cell'),'atp',5.0);")
+    assert m.add_parameter_cmd("k2", 2) == f"addparameter({m.var},'k2',2.0);"
+    assert m.add_reaction_cmd("rx", "a -> b") == (
+        f"set(addreaction({m.var},'a -> b'),'Name','rx');")
+
+def test_ml_str_escapes():
+    from core.sbio_model import _ml_str
+    assert _ml_str("a'b") == "'a''b'"
+
+
+# --- multiple models ---
+def test_get_model_ambiguous_raises(two_model_project):
+    svc = SbioService()
+    svc.load_project(two_model_project)
+    with pytest.raises(ModelNotFoundError):
+        svc.get_model()
+
+def test_get_model_by_name_with_multiple(two_model_project):
+    svc = SbioService()
+    svc.load_project(two_model_project)
+    assert svc.get_model("demo2").name == "demo2"

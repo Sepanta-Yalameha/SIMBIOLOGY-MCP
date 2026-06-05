@@ -17,7 +17,11 @@ class SbioService:
     def load_project(self, path):
         """Load a .sbproj, return the names of the models it contains."""
         self.execute("sbioreset;")                       # clean session
-        self.execute(f"sbioloadproject({_ml_str(path)})")
+        try:
+            self.execute(f"sbioloadproject({_ml_str(path)})")
+        except RuntimeError as exc:                       # bad/corrupt path
+            raise ProjectNotLoadedError(
+                f"Could not load project {path!r}: {exc}") from exc
         count = int(self.execute("numel(sbioroot().Models)", nargout=1))
         self._models = {}
         for i in range(1, count + 1):
