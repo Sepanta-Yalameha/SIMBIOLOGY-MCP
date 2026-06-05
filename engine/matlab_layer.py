@@ -1,8 +1,19 @@
+"""Thin MATLAB engine wrapper used by the core SimBiology service."""
+
+from __future__ import annotations
+
 import matlab.engine
+from matlab.engine import MatlabExecutionError
+
+from engine.exceptions import (
+    MatlabCommandNotFoundError,
+    MatlabCommandFailedError,
+    MatlabNotAliveError,
+    MatlabNotRunningError,
+)
 
 
 class MatlabLayer:
-    # Singleton instance of the MATLAB engine
     _eng = None
 
     @classmethod
@@ -13,31 +24,37 @@ class MatlabLayer:
 
     @classmethod
     def execute(cls, command, nargout=0):
-        if cls._eng is None:
-            raise RuntimeError("MATLAB engine not launched. Call MatlabEngine.launch() first.")
+        cls.ensure_alive()
         try:
             return cls._eng.eval(command, nargout=nargout)
-        except Exception as e:
-            raise RuntimeError(f"MATLAB error during command:\n  {command}\n  {e}") from e
+        except SyntaxError as exc:
+            raise MatlabCommandNotFoundError(f"MATLAB command not found: {command}") from exc
+        except MatlabExecutionError as exc:
+            message = str(exc)
+            missing_markers = (
+                "Undefined function or variable",
+                "Unrecognized function or variable",
+                "Unable to resolve the name",
+                "not found",
+            )
+            if any(marker in message for marker in missing_markers):
+                raise MatlabCommandNotFoundError(f"MATLAB command not found: {command}") from exc
+            raise MatlabCommandFailedError(f"MATLAB command failed: {command}") from exc
+        except Exception as exc:
+            raise MatlabCommandFailedError(f"MATLAB command failed: {command}") from exc
 
     @classmethod
-    def is_alive(cls):
+    def ensure_alive(cls):
+        if cls._eng is None:
+            raise MatlabNotAliveError("MATLAB engine is not alive.")
         try:
             cls._eng.eval("1+1;", nargout=0)
-            return True
-        except Exception:
-            return False
+        except Exception as exc:
+            raise MatlabNotAliveError("MATLAB engine is not alive.") from exc
+        return True
 
     @classmethod
     def exit(cls):
         if cls._eng is not None:
             cls._eng.quit()
             cls._eng = None
-
-if __name__ == "__main__":
-    MatlabLayer.launch()
-    print("MATLAB engine launched successfully.")
-    print(MatlabLayer.is_alive())  # Test if engine is responsive
-    print("Is alive")
-    MatlabLayer.exit()
-    print("MATLAB engine exited successfully.")
