@@ -1,3 +1,9 @@
 ./vscode/
 .venv/
 projects/
+CLAUDE.md
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
