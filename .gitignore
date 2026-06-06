@@ -1,9 +1,9 @@
-./vscode/
+.vscode/
 .venv/
 projects/
 CLAUDE.md
 
 # Python
-__pycache__/
+**/__pycache__/
 *.pyc
 .pytest_cache/
