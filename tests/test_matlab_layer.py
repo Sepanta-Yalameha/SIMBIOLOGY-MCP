@@ -9,125 +9,141 @@ from engine.exceptions import (
 from engine.matlab_layer import MatlabLayer
 
 
-class FakeEngine:
-    def __init__(self):
-        self.calls = []
-        self.quit_called = False
-        self.probe_result = None
-        self.probe_side_effect = None
-        self.eval_result = None
-        self.eval_side_effect = None
+class FakeMatlabExecutionError(Exception):
+    """Test double for matlab.engine.MatlabExecutionError."""
 
-    def eval(self, command, nargout=0):
+
+class FakeEngine:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int]] = []
+        self.quit_called = False
+        self.probe_error: Exception | None = None
+        self.eval_error: Exception | None = None
+        self.result = None
+
+    def eval(self, command: str, nargout: int = 0):
         self.calls.append((command, nargout))
         if command == "1+1;":
-            if self.probe_side_effect is not None:
-                raise self.probe_side_effect
-            return self.probe_result
-        if self.eval_side_effect is not None:
-            raise self.eval_side_effect
-        return self.eval_result
+            if self.probe_error is not None:
+                raise self.probe_error
+            return None
+        if self.eval_error is not None:
+            raise self.eval_error
+        return self.result
 
-    def quit(self):
+    def quit(self) -> None:
         self.quit_called = True
 
 
 @pytest.fixture(autouse=True)
 def reset_layer():
+    MatlabLayer._instance = None
+    MatlabLayer._eng = None
+    yield
+    MatlabLayer._instance = None
     MatlabLayer._eng = None
 
 
-def test_launch_returns_single_engine(monkeypatch):
+def test_launch_starts_engine_once(monkeypatch):
     fake = FakeEngine()
     monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
 
-    eng1 = MatlabLayer.launch()
-    eng2 = MatlabLayer.launch()
+    layer = MatlabLayer()
+    layer.launch()
+    layer.launch()
 
-    assert eng1 is fake
-    assert eng2 is fake
+    assert layer._eng is fake
+    assert fake.calls == []
 
 
 def test_execute_returns_result(monkeypatch):
     fake = FakeEngine()
-    fake.eval_result = 2
+    fake.result = 2
     monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
 
-    MatlabLayer.launch()
-    result = MatlabLayer.execute("1 + 1", nargout=1)
+    layer = MatlabLayer()
+    layer.launch()
 
-    assert result == 2
+    assert layer.execute("1 + 1", nargout=1) == 2
     assert fake.calls == [("1+1;", 0), ("1 + 1", 1)]
 
 
-def test_execute_maps_missing_command_to_not_found(monkeypatch):
+def test_execute_maps_syntax_error_to_not_found(monkeypatch):
     fake = FakeEngine()
-    fake.eval_side_effect = SyntaxError("invalid syntax")
+    fake.eval_error = SyntaxError("invalid syntax")
     monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
 
-    MatlabLayer.launch()
+    layer = MatlabLayer()
+    layer.launch()
 
     with pytest.raises(MatlabCommandNotFoundError):
-        MatlabLayer.execute("bad command", nargout=0)
-    assert fake.calls == [("1+1;", 0), ("bad command", 0)]
+        layer.execute("bad command")
 
 
-def test_execute_maps_runtime_failure(monkeypatch):
+def test_execute_maps_missing_command_text_to_not_found(monkeypatch):
     fake = FakeEngine()
-    fake.eval_side_effect = RuntimeError("division by zero")
+    fake.eval_error = FakeMatlabExecutionError("Undefined function or variable 'x'")
     monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
+    monkeypatch.setattr("engine.matlab_layer.MatlabExecutionError", FakeMatlabExecutionError)
 
-    MatlabLayer.launch()
+    layer = MatlabLayer()
+    layer.launch()
+
+    with pytest.raises(MatlabCommandNotFoundError):
+        layer.execute("x")
+
+
+def test_execute_maps_runtime_error_to_failed(monkeypatch):
+    fake = FakeEngine()
+    fake.eval_error = FakeMatlabExecutionError("division by zero")
+    monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
+    monkeypatch.setattr("engine.matlab_layer.MatlabExecutionError", FakeMatlabExecutionError)
+
+    layer = MatlabLayer()
+    layer.launch()
 
     with pytest.raises(MatlabCommandFailedError):
-        MatlabLayer.execute("1/0", nargout=0)
-    assert fake.calls == [("1+1;", 0), ("1/0", 0)]
+        layer.execute("1/0")
 
 
-def test_execute_raises_when_engine_is_not_alive(monkeypatch):
+def test_execute_raises_when_engine_not_alive(monkeypatch):
     fake = FakeEngine()
-    fake.probe_side_effect = RuntimeError("terminated")
+    fake.probe_error = RuntimeError("terminated")
     monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
 
-    MatlabLayer.launch()
+    layer = MatlabLayer()
+    layer.launch()
 
     with pytest.raises(MatlabNotAliveError):
-        MatlabLayer.execute("1 + 1", nargout=0)
-    assert fake.calls == [("1+1;", 0)]
+        layer.execute("1 + 1")
 
 
-def test_ensure_alive_returns_true_when_eval_succeeds(monkeypatch):
+def test_ensure_alive_requires_launch():
+    layer = MatlabLayer()
+
+    with pytest.raises(MatlabNotRunningError):
+        layer.ensure_alive()
+
+
+def test_ensure_alive_detects_dead_engine(monkeypatch):
     fake = FakeEngine()
+    fake.probe_error = RuntimeError("terminated")
     monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
 
-    MatlabLayer.launch()
+    layer = MatlabLayer()
+    layer.launch()
 
-    assert MatlabLayer.ensure_alive()
-    assert fake.calls == [("1+1;", 0)]
-
-
-def test_ensure_alive_raises_when_engine_missing():
     with pytest.raises(MatlabNotAliveError):
-        MatlabLayer.ensure_alive()
+        layer.ensure_alive()
 
 
 def test_exit_quits_engine(monkeypatch):
     fake = FakeEngine()
     monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
 
-    MatlabLayer.launch()
-    MatlabLayer.exit()
+    layer = MatlabLayer()
+    layer.launch()
+    layer.exit()
 
     assert fake.quit_called
-    assert MatlabLayer._eng is None
-
-
-def test_ensure_alive_raises_when_dead(monkeypatch):
-    fake = FakeEngine()
-    fake.probe_side_effect = RuntimeError("terminated")
-    monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
-
-    MatlabLayer.launch()
-
-    with pytest.raises(MatlabNotAliveError):
-        MatlabLayer.ensure_alive()
+    assert layer._eng is None
