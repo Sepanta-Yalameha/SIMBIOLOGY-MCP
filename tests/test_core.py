@@ -124,9 +124,9 @@ def test_builder_string_formats(sample_project):
     assert m.add_reaction_cmd("rx", "a -> b") == (
         f"set(addreaction({m.var},'a -> b'),'Name','rx');")
 
-def test_ml_str_escapes():
-    from core.sbio_model import _ml_str
-    assert _ml_str("a'b") == "'a''b'"
+def test_to_matlab_string_escapes():
+    from core.sbio_model import to_matlab_string
+    assert to_matlab_string("a'b") == "'a''b'"
 
 
 # --- multiple models ---
