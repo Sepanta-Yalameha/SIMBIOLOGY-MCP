@@ -1,21 +1,16 @@
-"""Project file discovery."""
+"""FastMCP server wiring for SimBiology tools."""
 
 from __future__ import annotations
 
-from pathlib import Path
+from fastmcp import FastMCP
+
+from tools.registry import TOOLS
 
 
-class ProjectLoader:
-    def collect_python_files(self, *paths: str) -> list[str]:
-        filepaths: list[str] = []
-        for path in paths:
-            candidate = Path(path)
-            if candidate.is_dir():
-                filepaths.extend(str(file) for file in candidate.rglob("*.py"))
-            elif candidate.is_file() and candidate.suffix == ".py":
-                filepaths.append(str(candidate))
-            else:
-                raise FileNotFoundError(f"Path {path} does not exist.")
-        return filepaths
+def build_server() -> FastMCP:
+    """Create and configure the FastMCP server."""
 
- 
+    mcp = FastMCP()
+    for tool_fn in TOOLS.values():
+        mcp.add_tool(tool_fn)
+    return mcp
