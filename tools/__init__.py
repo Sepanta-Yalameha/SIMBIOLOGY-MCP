@@ -1,5 +1,4 @@
 """Tool registration and metadata."""
 
-from .tool import BaseTool
-from .add_tool import AddTool
+from .add_tool import add
 from .registry import TOOLS, register

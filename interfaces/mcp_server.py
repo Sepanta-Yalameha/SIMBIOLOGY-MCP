@@ -15,10 +15,10 @@ class MCPServer:
         self._register_tools()
 
     def _register_tools(self) -> None:
-        """Register all internal tool classes with FastMCP."""
+        """Register all internal tool functions with FastMCP."""
 
-        for tool_cls in TOOLS.values():
-            self.mcp.add_tool(tool_cls)
+        for tool_fn in TOOLS.values():
+            self.mcp.add_tool(tool_fn)
 
     def run_server(self) -> None:
         """Run the MCP server."""
