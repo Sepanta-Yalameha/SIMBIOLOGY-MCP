@@ -2,7 +2,7 @@
 .venv/
 projects/
 CLAUDE.md
-
+docs/
 # Python
 **/__pycache__/
 *.pyc
