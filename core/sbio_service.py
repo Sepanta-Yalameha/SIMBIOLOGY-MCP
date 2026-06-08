@@ -18,7 +18,7 @@ class SbioService:
     """Owns one SimBiology session over the shared MATLAB engine."""
 
     def __init__(self) -> None:
-        MatlabLayer.launch()
+        MatlabLayer().launch()
         self.project_path: str | None = None
         self._models: dict[str, str] = {}   # model name -> MATLAB workspace var
 
@@ -101,4 +101,4 @@ class SbioService:
     def execute(self, command: str, nargout: int = 0) -> Any:
         """Run a MATLAB command through the shared engine."""
 
-        return MatlabLayer.execute(command, nargout)
+        return MatlabLayer().execute(command, nargout)
