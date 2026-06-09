@@ -1,0 +1,37 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          Get-Content requirements.txt |
+            Where-Object { $_ -and $_ -notmatch '^(matlabengine|pywin32|pywin32-ctypes)==' } |
+            Set-Content requirements.ci.txt
+          pip install -r requirements.ci.txt
+          pip install pytest
+
+      - name: Run tests
+        shell: pwsh
+        run: python -m pytest -q

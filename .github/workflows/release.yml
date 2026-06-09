@@ -1,0 +1,23 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create release artifact
+        shell: pwsh
+        run: |
+          Write-Host "Tagged release detected."
+          Write-Host "Swap this step for your marketplace publish command if you have one."
