@@ -124,6 +124,15 @@ def test_builder_string_formats(sample_project):
     assert m.add_reaction_cmd("rx", "a -> b") == (
         f"set(addreaction({m.var},'a -> b'),'Name','rx');")
 
+def test_delete_and_modify_builder_formats(sample_project):
+    m = _loaded(sample_project).get_model()
+    assert m.delete_species_cmd("glucose") == (
+        f"delete(sbioselect({m.var},'Type','species','Name','glucose'));")
+    assert m.set_parameter_cmd("k1", value=2, units="1/second") == (
+        f"sbio_e = sbioselect({m.var},'Type','parameter','Name','k1'); "
+        "sbio_e.Value = 2.0; sbio_e.ValueUnits = '1/second';")
+    assert m.rename_model_cmd("renamed") == f"{m.var}.Name = 'renamed';"
+
 def test_to_matlab_string_escapes():
     from core.sbio_model import to_matlab_string
     assert to_matlab_string("a'b") == "'a''b'"
