@@ -7,6 +7,7 @@ MatlabLayer, never through matlab.engine directly.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from engine.matlab_layer import MatlabLayer
@@ -75,6 +76,7 @@ class SbioService:
         target = path or self.project_path
         if target is None:
             raise ProjectNotLoadedError("No project loaded; nothing to save.")
+        Path(target).parent.mkdir(parents=True, exist_ok=True)
         var_args = "".join(f",'{var}'" for var in self._models.values())
         self.execute(f"sbiosaveproject({to_matlab_string(target)}{var_args})")
 

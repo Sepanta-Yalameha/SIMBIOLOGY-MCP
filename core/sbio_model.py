@@ -7,7 +7,6 @@ service and persists the change.
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Any
 
 from engine.exceptions import ElementNotFoundError
@@ -28,13 +27,13 @@ def to_matlab_number(value: float) -> str:
     return repr(float(value))
 
 
-def _normalize_reaction_equation(equation: str) -> str:
-    """Strip any embedded rate expression and wrapper syntax from a reaction."""
+def _split_reaction_spec(equation: str) -> tuple[str, str | None]:
+    """Split a reaction spec into stoichiometry and optional rate."""
 
-    lhs = re.sub(r"\[([^\[\];]+);\s*[^\[\]]*\]", r"\1", equation)
-    lhs = lhs.split(";", 1)[0].strip()
-    lhs = lhs.replace("[", "").replace("]", "")
-    return lhs
+    parts = equation.split(";", 1)
+    reaction = parts[0].strip()
+    rate = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
+    return reaction, rate
 
 
 # struct() field expressions per element type; ``sbio_e`` is the selected element.
@@ -162,9 +161,14 @@ class SbioModel:
     def add_reaction_cmd(self, name: str, equation: str) -> str:
         """Build a command that adds a named reaction from an equation."""
 
-        equation = _normalize_reaction_equation(equation)
-        return (f"set(addreaction({self.var},{to_matlab_string(equation)}),"
-                f"'Name',{to_matlab_string(name)});")
+        reaction, rate = _split_reaction_spec(equation)
+        command = (
+            f"rxnObj = addreaction({self.var},{to_matlab_string(reaction)}); "
+            f"set(rxnObj,'Name',{to_matlab_string(name)});"
+        )
+        if rate is not None:
+            command += f" rxnObj.ReactionRate = {to_matlab_string(rate)};"
+        return command
 
     def add_compartment_cmd(self, name: str) -> str:
         """Build a command that adds a compartment."""

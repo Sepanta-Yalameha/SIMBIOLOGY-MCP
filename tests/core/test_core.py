@@ -90,6 +90,22 @@ def test_save_default_path_overwrites(sample_project, tmp_path):
     assert "nucleus" in again.get_model().compartments()
 
 
+def test_save_project_creates_parent_directory(monkeypatch, tmp_path):
+    svc = SbioService()
+    target = tmp_path / "nested" / "project.sbproj"
+    svc.project_path = str(target)
+    svc._models = {"demo": "m"}
+
+    def fake_execute(command, nargout=0):
+        return None
+
+    monkeypatch.setattr(svc, "execute", fake_execute)
+
+    svc.save_project()
+
+    assert target.parent.exists()
+
+
 # --- error contract ---
 def test_load_bad_path_raises(tmp_path):
     with pytest.raises(ProjectNotLoadedError):
@@ -122,9 +138,10 @@ def test_builder_string_formats(sample_project):
         f"addspecies(sbioselect({m.var},'Type','compartment','Name','cell'),'atp',5.0);")
     assert m.add_parameter_cmd("k2", 2) == f"addparameter({m.var},'k2',2.0);"
     assert m.add_reaction_cmd("rx", "a -> b") == (
-        f"set(addreaction({m.var},'a -> b'),'Name','rx');")
-    assert m.add_reaction_cmd("rx", "lac_dna -> lac_dna + [lac_mrna; k_tx * lac_dna]") == (
-        f"set(addreaction({m.var},'lac_dna -> lac_dna + lac_mrna'),'Name','rx');")
+        f"rxnObj = addreaction({m.var},'a -> b'); set(rxnObj,'Name','rx');")
+    assert m.add_reaction_cmd("rx", "lac_dna -> lac_dna + lac_mrna; k_tx * lac_dna") == (
+        f"rxnObj = addreaction({m.var},'lac_dna -> lac_dna + lac_mrna'); set(rxnObj,'Name','rx'); "
+        "rxnObj.ReactionRate = 'k_tx * lac_dna';")
 
 def test_delete_and_modify_builder_formats(sample_project):
     m = _loaded(sample_project).get_model()
