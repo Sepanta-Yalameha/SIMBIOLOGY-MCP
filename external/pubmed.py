@@ -25,8 +25,8 @@ def _get(url: str, params: dict[str, Any] | None = None) -> httpx.Response:
     return response
 
 
-def search(query: str, limit: int = 10, api_key: str | None = None) -> dict[str, Any]:
-    api_key = api_key or os.getenv("NCBI_API_KEY")
+def search(query: str, limit: int = 10) -> dict[str, Any]:
+    api_key = os.getenv("NCBI_API_KEY")
     params: dict[str, Any] = {
         "db": "pubmed",
         "term": query,
@@ -42,8 +42,8 @@ def search(query: str, limit: int = 10, api_key: str | None = None) -> dict[str,
     }
 
 
-def summary(pmid: str, api_key: str | None = None) -> dict[str, Any]:
-    api_key = api_key or os.getenv("NCBI_API_KEY")
+def summary(pmid: str) -> dict[str, Any]:
+    api_key = os.getenv("NCBI_API_KEY")
     params: dict[str, Any] = {
         "db": "pubmed",
         "id": pmid,
@@ -63,8 +63,8 @@ def summary(pmid: str, api_key: str | None = None) -> dict[str, Any]:
     return result
 
 
-def article(pmid: str, api_key: str | None = None) -> dict[str, Any]:
-    api_key = api_key or os.getenv("NCBI_API_KEY")
+def article(pmid: str) -> dict[str, Any]:
+    api_key = os.getenv("NCBI_API_KEY")
     params: dict[str, Any] = {
         "db": "pubmed",
         "id": pmid,

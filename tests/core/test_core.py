@@ -123,6 +123,8 @@ def test_builder_string_formats(sample_project):
     assert m.add_parameter_cmd("k2", 2) == f"addparameter({m.var},'k2',2.0);"
     assert m.add_reaction_cmd("rx", "a -> b") == (
         f"set(addreaction({m.var},'a -> b'),'Name','rx');")
+    assert m.add_reaction_cmd("rx", "lac_dna -> lac_dna + [lac_mrna; k_tx * lac_dna]") == (
+        f"set(addreaction({m.var},'lac_dna -> lac_dna + lac_mrna'),'Name','rx');")
 
 def test_delete_and_modify_builder_formats(sample_project):
     m = _loaded(sample_project).get_model()

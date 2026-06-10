@@ -9,20 +9,24 @@ from tools.registry import register
 
 
 @register("pubmed_search")
-def pubmed_search(query: str, limit: int = 10, api_key: str | None = None) -> dict[str, Any]:
-    return pubmed.search(query, limit=limit, api_key=api_key)
+def pubmed_search(query: str, limit: int = 10) -> dict[str, Any]:
+    """Search PubMed for matching articles."""
+    return pubmed.search(query, limit=limit)
 
 
 @register("pubmed_summary")
-def pubmed_summary(pmid: str, api_key: str | None = None) -> dict[str, Any]:
-    return pubmed.summary(pmid, api_key=api_key)
+def pubmed_summary(pmid: str) -> dict[str, Any]:
+    """Fetch a PubMed article summary."""
+    return pubmed.summary(pmid)
 
 
 @register("pubmed_article")
-def pubmed_article(pmid: str, api_key: str | None = None) -> dict[str, Any]:
-    return pubmed.article(pmid, api_key=api_key)
+def pubmed_article(pmid: str) -> dict[str, Any]:
+    """Fetch full PubMed article metadata."""
+    return pubmed.article(pmid)
 
 
 @register("igem_part")
 def igem_part(part_name: str) -> dict[str, Any]:
+    """Fetch an iGEM part record."""
     return igem.part(part_name)

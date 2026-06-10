@@ -2,30 +2,30 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlencode
+import requests
 
-import httpx
+from igem_registry_api import Client
+from igem_registry_api.client import Mode
 
-_IGEM_PARTS_BASE = "https://parts.igem.org/partsdb/get_part.cgi"
+_IGEM_API_BASE = "https://api.registry.igem.org/v1"
 
 
-def _get(url: str, params: dict[str, str] | None = None) -> httpx.Response:
-    response = httpx.get(url, params=params, timeout=20.0, follow_redirects=True)
-    response.raise_for_status()
-    return response
+def _part_name_to_slug(part_name: str) -> str:
+    return part_name.lower().replace("_", "-")
 
 
 def part(part_name: str) -> dict[str, str]:
-    response = _get(_IGEM_PARTS_BASE, {"part": part_name})
-    text = response.text
-    title = ""
-    for line in text.splitlines():
-        if line.strip().startswith("Part "):
-            title = line.strip()
-            break
+    slug = _part_name_to_slug(part_name)
+    client = Client.stub()
+    client.base = _IGEM_API_BASE
+    client.mode = Mode.ANON
+    client.session = requests.Session()
+    response = client.session.get(f"{client.base}/parts/slugs/{slug}", timeout=30.0)
+    response.raise_for_status()
+    record = response.json()
     return {
         "part": part_name,
-        "title": title,
-        "url": f"{_IGEM_PARTS_BASE}?{urlencode({'part': part_name})}",
-        "content": text,
+        "title": str(record.get("title") or ""),
+        "url": f"https://registry.igem.org/parts/{slug}",
+        "content": response.text,
     }

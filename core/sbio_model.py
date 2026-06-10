@@ -7,6 +7,7 @@ service and persists the change.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from engine.exceptions import ElementNotFoundError
@@ -27,6 +28,15 @@ def to_matlab_number(value: float) -> str:
     return repr(float(value))
 
 
+def _normalize_reaction_equation(equation: str) -> str:
+    """Strip any embedded rate expression and wrapper syntax from a reaction."""
+
+    lhs = re.sub(r"\[([^\[\];]+);\s*[^\[\]]*\]", r"\1", equation)
+    lhs = lhs.split(";", 1)[0].strip()
+    lhs = lhs.replace("[", "").replace("]", "")
+    return lhs
+
+
 # struct() field expressions per element type; ``sbio_e`` is the selected element.
 _DETAIL: dict[str, str] = {
     "species": "struct('Name',sbio_e.Name,'Value',sbio_e.Value,"
@@ -37,6 +47,29 @@ _DETAIL: dict[str, str] = {
                    "'Units',sbio_e.CapacityUnits)",
     "parameter": "struct('Name',sbio_e.Name,'Value',sbio_e.Value,"
                  "'Units',sbio_e.ValueUnits)",
+}
+
+_SETTERS: dict[str, dict[str, str]] = {
+    "species": {
+        "name": "sbio_e.Name = {value};",
+        "value": "sbio_e.Value = {value};",
+        "units": "sbio_e.InitialAmountUnits = {value};",
+    },
+    "reaction": {
+        "name": "sbio_e.Name = {value};",
+        "reaction": "sbio_e.Reaction = {value};",
+        "reversible": "sbio_e.Reversible = {value};",
+    },
+    "compartment": {
+        "name": "sbio_e.Name = {value};",
+        "capacity": "sbio_e.Capacity = {value};",
+        "units": "sbio_e.CapacityUnits = {value};",
+    },
+    "parameter": {
+        "name": "sbio_e.Name = {value};",
+        "value": "sbio_e.Value = {value};",
+        "units": "sbio_e.ValueUnits = {value};",
+    },
 }
 
 
@@ -129,6 +162,7 @@ class SbioModel:
     def add_reaction_cmd(self, name: str, equation: str) -> str:
         """Build a command that adds a named reaction from an equation."""
 
+        equation = _normalize_reaction_equation(equation)
         return (f"set(addreaction({self.var},{to_matlab_string(equation)}),"
                 f"'Name',{to_matlab_string(name)});")
 
@@ -141,3 +175,77 @@ class SbioModel:
         """Build a command that adds a parameter."""
 
         return f"addparameter({self.var},{to_matlab_string(name)},{to_matlab_number(value)});"
+
+    def rename_model_cmd(self, new_name: str) -> str:
+        """Build a command that renames the model."""
+
+        return f"{self.var}.Name = {to_matlab_string(new_name)};"
+
+    def delete_model_cmd(self) -> str:
+        """Build a command that deletes the model from the root."""
+
+        return f"delete({self.var});"
+
+    def delete_species_cmd(self, name: str) -> str:
+        """Build a command that deletes a species."""
+
+        return self._delete_cmd("species", name)
+
+    def delete_reaction_cmd(self, name: str) -> str:
+        """Build a command that deletes a reaction."""
+
+        return self._delete_cmd("reaction", name)
+
+    def delete_compartment_cmd(self, name: str) -> str:
+        """Build a command that deletes a compartment."""
+
+        return self._delete_cmd("compartment", name)
+
+    def delete_parameter_cmd(self, name: str) -> str:
+        """Build a command that deletes a parameter."""
+
+        return self._delete_cmd("parameter", name)
+
+    def set_species_cmd(self, name: str, **fields: Any) -> str:
+        """Build commands that update a species."""
+
+        return self._set_cmd("species", name, fields)
+
+    def set_reaction_cmd(self, name: str, **fields: Any) -> str:
+        """Build commands that update a reaction."""
+
+        return self._set_cmd("reaction", name, fields)
+
+    def set_compartment_cmd(self, name: str, **fields: Any) -> str:
+        """Build commands that update a compartment."""
+
+        return self._set_cmd("compartment", name, fields)
+
+    def set_parameter_cmd(self, name: str, **fields: Any) -> str:
+        """Build commands that update a parameter."""
+
+        return self._set_cmd("parameter", name, fields)
+
+    def _delete_cmd(self, kind: str, name: str) -> str:
+        select = (f"sbioselect({self.var},'Type',{to_matlab_string(kind)},"
+                  f"'Name',{to_matlab_string(name)})")
+        return f"delete({select});"
+
+    def _set_cmd(self, kind: str, name: str, fields: dict[str, Any]) -> str:
+        select = (f"sbioselect({self.var},'Type',{to_matlab_string(kind)},"
+                  f"'Name',{to_matlab_string(name)})")
+        updates: list[str] = [f"sbio_e = {select};"]
+        for field, value in fields.items():
+            key = field.lower()
+            if key not in _SETTERS[kind]:
+                raise KeyError(f"Unsupported {kind} field: {field}")
+            formatted = self._format_field_value(kind, key, value)
+            updates.append(_SETTERS[kind][key].format(value=formatted))
+        return " ".join(updates)
+
+    def _format_field_value(self, kind: str, field: str, value: Any) -> str:
+        if field in {"name", "reaction", "units", "compartment"}:
+            return to_matlab_string(value)
+        if field == "reversible":
+            return "true" if bool(value) else "false"
+        return to_matlab_number(value)
