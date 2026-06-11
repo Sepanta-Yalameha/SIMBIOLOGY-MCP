@@ -14,6 +14,18 @@ def _model(name: str | None = None):
     return _SERVICE.get_model(name)
 
 
+def _run(command: str) -> None:
+    _SERVICE.execute(command)
+
+
+def _modify(model_name: str | None, name: str, builder, **fields: Any) -> dict[str, Any]:
+    model = _model(model_name)
+    data = {key: value for key, value in fields.items() if value is not None}
+    if data:
+        _run(builder(model, name, **data))
+    return {"name": name, **data}
+
+
 @register("load_project")
 def load_project(path: str) -> dict[str, Any]:
     """Load a SimBiology project."""
@@ -90,31 +102,29 @@ def list_parameters(model_name: str | None = None) -> list[str]:
 def create_compartment(name: str, model_name: str | None = None, capacity: float = 1.0) -> dict[str, Any]:
     """Create a compartment in a model."""
     model = _model(model_name)
-    _SERVICE.execute(model.add_compartment_cmd(name))
+    _run(model.add_compartment_cmd(name))
     if capacity != 1.0:
-        _SERVICE.execute(model.set_compartment_cmd(name, capacity=capacity))
+        _run(model.set_compartment_cmd(name, capacity=capacity))
     return {"name": name, "capacity": capacity}
 
 
 @register("modify_compartment")
 def modify_compartment(name: str, model_name: str | None = None, capacity: float | None = None, units: str | None = None) -> dict[str, Any]:
     """Modify a compartment in a model."""
-    model = _model(model_name)
-    fields: dict[str, Any] = {}
-    if capacity is not None:
-        fields["capacity"] = capacity
-    if units is not None:
-        fields["units"] = units
-    if fields:
-        _SERVICE.execute(model.set_compartment_cmd(name, **fields))
-    return {"name": name, **fields}
+    return _modify(
+        model_name,
+        name,
+        lambda model, name, **fields: model.set_compartment_cmd(name, **fields),
+        capacity=capacity,
+        units=units,
+    )
 
 
 @register("remove_compartment")
 def remove_compartment(name: str, model_name: str | None = None) -> dict[str, Any]:
     """Remove a compartment from a model."""
     model = _model(model_name)
-    _SERVICE.execute(model.delete_compartment_cmd(name))
+    _run(model.delete_compartment_cmd(name))
     return {"removed": name}
 
 
@@ -122,29 +132,27 @@ def remove_compartment(name: str, model_name: str | None = None) -> dict[str, An
 def create_species(name: str, compartment: str, value: float = 0.0, model_name: str | None = None) -> dict[str, Any]:
     """Create a species in a model."""
     model = _model(model_name)
-    _SERVICE.execute(model.add_species_cmd(compartment, name, value))
+    _run(model.add_species_cmd(compartment, name, value))
     return {"name": name, "compartment": compartment, "value": value}
 
 
 @register("modify_species")
 def modify_species(name: str, model_name: str | None = None, value: float | None = None, units: str | None = None) -> dict[str, Any]:
     """Modify a species in a model."""
-    model = _model(model_name)
-    fields: dict[str, Any] = {}
-    if value is not None:
-        fields["value"] = value
-    if units is not None:
-        fields["units"] = units
-    if fields:
-        _SERVICE.execute(model.set_species_cmd(name, **fields))
-    return {"name": name, **fields}
+    return _modify(
+        model_name,
+        name,
+        lambda model, name, **fields: model.set_species_cmd(name, **fields),
+        value=value,
+        units=units,
+    )
 
 
 @register("remove_species")
 def remove_species(name: str, model_name: str | None = None) -> dict[str, Any]:
     """Remove a species from a model."""
     model = _model(model_name)
-    _SERVICE.execute(model.delete_species_cmd(name))
+    _run(model.delete_species_cmd(name))
     return {"removed": name}
 
 
@@ -152,29 +160,27 @@ def remove_species(name: str, model_name: str | None = None) -> dict[str, Any]:
 def create_reaction(name: str, equation: str, model_name: str | None = None) -> dict[str, Any]:
     """Create a reaction in a model."""
     model = _model(model_name)
-    _SERVICE.execute(model.add_reaction_cmd(name, equation))
+    _run(model.add_reaction_cmd(name, equation))
     return {"name": name, "reaction": equation}
 
 
 @register("modify_reaction")
 def modify_reaction(name: str, model_name: str | None = None, equation: str | None = None, reversible: bool | None = None) -> dict[str, Any]:
     """Modify a reaction in a model."""
-    model = _model(model_name)
-    fields: dict[str, Any] = {}
-    if equation is not None:
-        fields["reaction"] = equation
-    if reversible is not None:
-        fields["reversible"] = reversible
-    if fields:
-        _SERVICE.execute(model.set_reaction_cmd(name, **fields))
-    return {"name": name, **fields}
+    return _modify(
+        model_name,
+        name,
+        lambda model, name, **fields: model.set_reaction_cmd(name, **fields),
+        reaction=equation,
+        reversible=reversible,
+    )
 
 
 @register("remove_reaction")
 def remove_reaction(name: str, model_name: str | None = None) -> dict[str, Any]:
     """Remove a reaction from a model."""
     model = _model(model_name)
-    _SERVICE.execute(model.delete_reaction_cmd(name))
+    _run(model.delete_reaction_cmd(name))
     return {"removed": name}
 
 
@@ -182,27 +188,25 @@ def remove_reaction(name: str, model_name: str | None = None) -> dict[str, Any]:
 def create_parameter(name: str, value: float, model_name: str | None = None) -> dict[str, Any]:
     """Create a parameter in a model."""
     model = _model(model_name)
-    _SERVICE.execute(model.add_parameter_cmd(name, value))
+    _run(model.add_parameter_cmd(name, value))
     return {"name": name, "value": value}
 
 
 @register("modify_parameter")
 def modify_parameter(name: str, model_name: str | None = None, value: float | None = None, units: str | None = None) -> dict[str, Any]:
     """Modify a parameter in a model."""
-    model = _model(model_name)
-    fields: dict[str, Any] = {}
-    if value is not None:
-        fields["value"] = value
-    if units is not None:
-        fields["units"] = units
-    if fields:
-        _SERVICE.execute(model.set_parameter_cmd(name, **fields))
-    return {"name": name, **fields}
+    return _modify(
+        model_name,
+        name,
+        lambda model, name, **fields: model.set_parameter_cmd(name, **fields),
+        value=value,
+        units=units,
+    )
 
 
 @register("remove_parameter")
 def remove_parameter(name: str, model_name: str | None = None) -> dict[str, Any]:
     """Remove a parameter from a model."""
     model = _model(model_name)
-    _SERVICE.execute(model.delete_parameter_cmd(name))
+    _run(model.delete_parameter_cmd(name))
     return {"removed": name}
