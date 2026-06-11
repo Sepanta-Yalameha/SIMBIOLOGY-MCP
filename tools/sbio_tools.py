@@ -8,11 +8,15 @@ model, running a command, echoing the result) lives in the helpers below.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from core.sbio_model import SbioModel
 from core.sbio_service import SbioService
 from tools.registry import register
+
+SolverType = Literal[
+    "ode15s", "ode23t", "ode45", "sundials", "ssa", "expltau", "impltau"
+]
 
 _service: SbioService | None = None
 
@@ -211,3 +215,54 @@ def modify_parameter(name: str, model_name: str | None = None, value: float | No
 def remove_parameter(name: str, model_name: str | None = None) -> dict[str, Any]:
     """Remove a parameter from a model."""
     return _remove(model_name, "parameter", name)
+
+
+# --- simulation ---
+@register("get_simulation_settings")
+def get_simulation_settings(model_name: str | None = None) -> dict[str, Any]:
+    """Get the current simulation settings (configset) for a model."""
+    return _model(model_name).get_configset()
+
+
+@register("configure_simulation")
+def configure_simulation(
+    model_name: str | None = None,
+    stop_time: float | None = None,
+    solver_type: SolverType | None = None,
+    time_units: str | None = None,
+    absolute_tolerance: float | None = None,
+    relative_tolerance: float | None = None,
+    max_wall_clock: float | None = None,
+    max_number_of_logs: float | None = None,
+) -> dict[str, Any]:
+    """Configure simulation settings (stop time, solver, tolerances) for a model."""
+    model = _model(model_name)
+    fields = {
+        key: value
+        for key, value in {
+            "stop_time": stop_time,
+            "solver_type": solver_type,
+            "time_units": time_units,
+            "absolute_tolerance": absolute_tolerance,
+            "relative_tolerance": relative_tolerance,
+            "max_wall_clock": max_wall_clock,
+            "max_number_of_logs": max_number_of_logs,
+        }.items()
+        if value is not None
+    }
+    if fields:
+        _run(model.set_configset_cmd(**fields))
+    return model.get_configset()
+
+
+@register("simulate_model")
+def simulate_model(
+    model_name: str | None = None,
+    species: list[str] | None = None,
+) -> dict[str, Any]:
+    """Run a SimBiology model simulation and return time-course results.
+
+    If ``species`` is given, only those quantities are returned instead of every
+    logged state.
+    """
+    return _model(model_name).simulate(species=species)

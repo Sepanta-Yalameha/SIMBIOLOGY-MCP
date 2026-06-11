@@ -7,6 +7,7 @@ service and persists the change.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 from engine.exceptions import ElementNotFoundError
@@ -36,6 +37,43 @@ def _split_reaction_spec(equation: str) -> tuple[str, str | None]:
     return reaction, rate
 
 
+def _finite_or_none(value: Any) -> Any:
+    """Collapse non-finite floats (Inf/NaN) to None so results stay JSON-safe."""
+
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
+def _matrix(value: Any) -> list[list[float]]:
+    """Normalise a MATLAB scalar/vector/matrix into a list of float rows."""
+
+    if value is None:
+        return []
+    if isinstance(value, (int, float)):
+        return [[float(value)]]
+    rows: list[list[float]] = []
+    for row in value:
+        if isinstance(row, (int, float)):
+            rows.append([float(row)])
+        else:
+            rows.append([float(item) for item in row])
+    return rows
+
+
+def _format_simdata(time: Any, data: Any, names: Any, units: Any) -> dict[str, Any]:
+    """Marshal raw SimData arrays into a JSON-friendly time-course dict."""
+
+    names = [names] if isinstance(names, str) else [str(name) for name in names]
+    data_rows = _matrix(data)
+    return {
+        "time": [row[0] for row in _matrix(time)],
+        "time_units": str(units),
+        "names": names,
+        "data": {name: [row[index] for row in data_rows] for index, name in enumerate(names)},
+    }
+
+
 _DETAIL: dict[str, str] = {
     "species": "struct('Name',sbio_e.Name,'Value',sbio_e.Value,'Units',sbio_e.InitialAmountUnits,'Compartment',sbio_e.Parent.Name)",
     "reaction": "struct('Name',sbio_e.Name,'Reaction',sbio_e.Reaction,'Reversible',sbio_e.Reversible)",
@@ -51,6 +89,29 @@ _FIELD_ATTRS: dict[str, dict[str, str]] = {
     "compartment": {"name": "Name", "capacity": "Capacity", "units": "CapacityUnits"},
     "parameter": {"name": "Name", "value": "Value", "units": "ValueUnits"},
 }
+
+# Active-configset reader; ``sbio_cs`` is the selected configset. Tolerances live
+# on SolverOptions and are read separately, because stochastic solvers
+# (ssa/expltau/impltau) use an SSASolverOptions class that doesn't expose them.
+_CONFIGSET_DETAIL = (
+    "struct("
+    "'StopTime',sbio_cs.StopTime,"
+    "'SolverType',sbio_cs.SolverType,"
+    "'TimeUnits',sbio_cs.TimeUnits,"
+    "'MaximumWallClock',sbio_cs.MaximumWallClock,"
+    "'MaximumNumberOfLogs',sbio_cs.MaximumNumberOfLogs)"
+)
+
+_CONFIGSET_SETTERS: dict[str, str] = {
+    "stop_time": "sbio_cs.StopTime = {value};",
+    "solver_type": "sbio_cs.SolverType = {value};",
+    "time_units": "sbio_cs.TimeUnits = {value};",
+    "absolute_tolerance": "sbio_cs.SolverOptions.AbsoluteTolerance = {value};",
+    "relative_tolerance": "sbio_cs.SolverOptions.RelativeTolerance = {value};",
+    "max_wall_clock": "sbio_cs.MaximumWallClock = {value};",
+    "max_number_of_logs": "sbio_cs.MaximumNumberOfLogs = {value};",
+}
+_CONFIGSET_STRING_FIELDS = {"solver_type", "time_units"}
 
 
 class SbioModel:
@@ -163,3 +224,48 @@ class SbioModel:
                 value = to_matlab_number(value)
             updates.append(f"sbio_e.{attr} = {value};")
         return " ".join(updates)
+
+    # --- simulation: configset read + builder, and the run itself ---
+    def get_configset(self) -> dict[str, Any]:
+        """Return the active configset's settings (tolerances only when exposed)."""
+
+        self._service.execute(f"sbio_cs = getconfigset({self.var});")
+        raw = self._service.execute(_CONFIGSET_DETAIL, nargout=1)
+        settings = {key: _finite_or_none(value) for key, value in raw.items()}
+        if self._service.execute("isprop(sbio_cs.SolverOptions,'AbsoluteTolerance')", nargout=1):
+            settings["AbsoluteTolerance"] = self._service.execute(
+                "sbio_cs.SolverOptions.AbsoluteTolerance", nargout=1)
+            settings["RelativeTolerance"] = self._service.execute(
+                "sbio_cs.SolverOptions.RelativeTolerance", nargout=1)
+        return settings
+
+    def set_configset_cmd(self, **fields: Any) -> str:
+        """Build commands updating the active configset (KeyError on unknown field)."""
+
+        updates = [f"sbio_cs = getconfigset({self.var});"]
+        for field, value in fields.items():
+            key = field.lower()
+            if key not in _CONFIGSET_SETTERS:
+                raise KeyError(f"Unsupported simulation setting: {field}")
+            formatted = to_matlab_string(value) if key in _CONFIGSET_STRING_FIELDS else to_matlab_number(value)
+            updates.append(_CONFIGSET_SETTERS[key].format(value=formatted))
+        return " ".join(updates)
+
+    def simulate(self, species: list[str] | None = None) -> dict[str, Any]:
+        """Run ``sbiosimulate`` on the active configset and return time-course data.
+
+        If ``species`` is given, only those quantities are returned (via
+        ``selectbyname``) instead of every logged state.
+        """
+
+        self._service.execute(f"sbio_sd = sbiosimulate({self.var});")
+        source = "sbio_sd"
+        if species:
+            names_cell = "{" + ",".join(to_matlab_string(s) for s in species) + "}"
+            self._service.execute(f"sbio_sd_sel = selectbyname(sbio_sd,{names_cell});")
+            source = "sbio_sd_sel"
+        time = self._service.execute(f"{source}.Time", nargout=1)
+        data = self._service.execute(f"{source}.Data", nargout=1)
+        names = self._service.execute(f"{source}.DataNames", nargout=1)
+        units = self._service.execute(f"{source}.TimeUnits", nargout=1)
+        return _format_simdata(time, data, names, units)

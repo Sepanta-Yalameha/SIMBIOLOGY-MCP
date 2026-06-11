@@ -108,3 +108,15 @@ def test_set_reaction_cmd_reversible_renders_boolean(model):
 def test_set_cmd_rejects_unknown_field(model):
     with pytest.raises(KeyError):
         model.set_species_cmd("s", bogus=1)
+
+
+# --- configset (simulation settings) builder ---
+def test_set_configset_cmd_formats_string_and_numeric_fields(model):
+    assert model.set_configset_cmd(stop_time=5, solver_type="ode45") == (
+        "sbio_cs = getconfigset(m); "
+        "sbio_cs.StopTime = 5.0; sbio_cs.SolverType = 'ode45';")
+
+
+def test_set_configset_cmd_rejects_unknown_setting(model):
+    with pytest.raises(KeyError):
+        model.set_configset_cmd(nonsense=1)

@@ -34,6 +34,21 @@ def sample_project(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
+def simulatable_project(tmp_path_factory):
+    """A first-order decay model A -> B with a rate law, ready to simulate."""
+    path = str(tmp_path_factory.mktemp("sim") / "decay.sbproj")
+    layer = MatlabLayer()
+    e = layer.execute
+    e("sbioreset;")
+    e("m=sbiomodel('decay'); c=addcompartment(m,'cell'); "
+      "addspecies(c,'A',10); addspecies(c,'B',0); "
+      "addparameter(m,'k1',0.5); "
+      "r=addreaction(m,'A -> B'); r.ReactionRate='k1*A';")
+    e(f"sbiosaveproject('{path}','m');")
+    return path
+
+
+@pytest.fixture(scope="session")
 def two_model_project(tmp_path_factory):
     """A project containing two models, for the ambiguous get_model() branch."""
     path = str(tmp_path_factory.mktemp("proj2") / "two.sbproj")
