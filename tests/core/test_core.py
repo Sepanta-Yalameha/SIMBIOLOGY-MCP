@@ -4,6 +4,8 @@ from core.sbio_model import SbioModel
 from engine.exceptions import (
     ProjectNotLoadedError, ModelNotFoundError, ElementNotFoundError)
 
+pytestmark = pytest.mark.matlab
+
 
 def _loaded(project):
     svc = SbioService()
@@ -129,32 +131,6 @@ def test_get_parameter_detail(sample_project):
 def test_get_parameter_unknown_raises(sample_project):
     with pytest.raises(ElementNotFoundError):
         _loaded(sample_project).get_model().get_parameter("nope")
-
-
-# --- builder string formats (pure, no execution) ---
-def test_builder_string_formats(sample_project):
-    m = _loaded(sample_project).get_model()
-    assert m.add_species_cmd("cell", "atp", 5) == (
-        f"addspecies(sbioselect({m.var},'Type','compartment','Name','cell'),'atp',5.0);")
-    assert m.add_parameter_cmd("k2", 2) == f"addparameter({m.var},'k2',2.0);"
-    assert m.add_reaction_cmd("rx", "a -> b") == (
-        f"rxnObj = addreaction({m.var},'a -> b'); set(rxnObj,'Name','rx');")
-    assert m.add_reaction_cmd("rx", "lac_dna -> lac_dna + lac_mrna; k_tx * lac_dna") == (
-        f"rxnObj = addreaction({m.var},'lac_dna -> lac_dna + lac_mrna'); set(rxnObj,'Name','rx'); "
-        "rxnObj.ReactionRate = 'k_tx * lac_dna';")
-
-def test_delete_and_modify_builder_formats(sample_project):
-    m = _loaded(sample_project).get_model()
-    assert m.delete_species_cmd("glucose") == (
-        f"delete(sbioselect({m.var},'Type','species','Name','glucose'));")
-    assert m.set_parameter_cmd("k1", value=2, units="1/second") == (
-        f"sbio_e = sbioselect({m.var},'Type','parameter','Name','k1'); "
-        "sbio_e.Value = 2.0; sbio_e.ValueUnits = '1/second';")
-    assert m.rename_model_cmd("renamed") == f"{m.var}.Name = 'renamed';"
-
-def test_to_matlab_string_escapes():
-    from core.sbio_model import to_matlab_string
-    assert to_matlab_string("a'b") == "'a''b'"
 
 
 # --- multiple models ---

@@ -1,4 +1,8 @@
+import pytest
+
 from external.pubmed import search as pubmed_search
+
+pytestmark = pytest.mark.live
 
 
 def test_pubmed_search_live():

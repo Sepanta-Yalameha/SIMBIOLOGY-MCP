@@ -1,4 +1,8 @@
+import pytest
+
 from external.igem import part as igem_part
+
+pytestmark = pytest.mark.live
 
 
 def test_igem_part_live():

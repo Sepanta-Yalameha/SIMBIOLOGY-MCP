@@ -34,4 +34,6 @@ jobs:
 
       - name: Run tests
         shell: pwsh
-        run: python -m pytest -q
+        # MATLAB Engine and network APIs are unavailable on hosted runners;
+        # the matlab/live integration tests run locally. See conftest.py.
+        run: python -m pytest -q -m "not matlab and not live"

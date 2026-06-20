@@ -1,5 +1,7 @@
 """Shared fixtures for core tests: one engine per session; saved sample projects."""
 
+import importlib.util
+
 import pytest
 
 from engine.matlab_layer import MatlabLayer
@@ -7,6 +9,9 @@ from engine.matlab_layer import MatlabLayer
 
 @pytest.fixture(scope="session", autouse=True)
 def _engine():
+    if importlib.util.find_spec("matlab") is None:
+        yield  # no MATLAB Engine installed; matlab-marked tests are skipped anyway
+        return
     layer = MatlabLayer()
     layer.launch()
     yield
