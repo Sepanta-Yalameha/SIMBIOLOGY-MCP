@@ -4,15 +4,30 @@ from __future__ import annotations
 
 from typing import Any
 
-import matlab.engine
-from matlab.engine import MatlabExecutionError
-
 from engine.exceptions import (
     MatlabCommandNotFoundError,
     MatlabCommandFailedError,
     MatlabNotAliveError,
     MatlabNotRunningError,
 )
+
+try:  # The MATLAB Engine for Python is optional at import time (CI, linting).
+    from matlab.engine import MatlabExecutionError
+except ImportError:  # Real calls fail later in launch(); module import stays safe.
+    class MatlabExecutionError(Exception):
+        """Fallback when the MATLAB Engine for Python is not installed."""
+
+
+def _start_matlab() -> Any:
+    """Start and return a MATLAB engine.
+
+    Imported lazily so this module loads on machines without the MATLAB Engine
+    for Python (CI, static analysis); patched directly in unit tests.
+    """
+
+    import matlab.engine
+
+    return matlab.engine.start_matlab()
 
 
 class MatlabLayer:
@@ -32,7 +47,7 @@ class MatlabLayer:
         """Start MATLAB if it is not already running."""
 
         if self._eng is None:
-            self._eng = matlab.engine.start_matlab()
+            self._eng = _start_matlab()
 
     def execute(self, command: str, nargout: int = 0) -> Any:
         """Execute a MATLAB command.

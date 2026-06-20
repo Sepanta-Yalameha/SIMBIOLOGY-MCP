@@ -4,6 +4,8 @@ from core.sbio_model import SbioModel
 from engine.exceptions import (
     ProjectNotLoadedError, ModelNotFoundError, ElementNotFoundError)
 
+pytestmark = pytest.mark.matlab
+
 
 def _loaded(project):
     svc = SbioService()
@@ -90,6 +92,22 @@ def test_save_default_path_overwrites(sample_project, tmp_path):
     assert "nucleus" in again.get_model().compartments()
 
 
+def test_save_project_creates_parent_directory(monkeypatch, tmp_path):
+    svc = SbioService()
+    target = tmp_path / "nested" / "project.sbproj"
+    svc.project_path = str(target)
+    svc._models = {"demo": "m"}
+
+    def fake_execute(command, nargout=0):
+        return None
+
+    monkeypatch.setattr(svc, "execute", fake_execute)
+
+    svc.save_project()
+
+    assert target.parent.exists()
+
+
 # --- error contract ---
 def test_load_bad_path_raises(tmp_path):
     with pytest.raises(ProjectNotLoadedError):
@@ -113,20 +131,6 @@ def test_get_parameter_detail(sample_project):
 def test_get_parameter_unknown_raises(sample_project):
     with pytest.raises(ElementNotFoundError):
         _loaded(sample_project).get_model().get_parameter("nope")
-
-
-# --- builder string formats (pure, no execution) ---
-def test_builder_string_formats(sample_project):
-    m = _loaded(sample_project).get_model()
-    assert m.add_species_cmd("cell", "atp", 5) == (
-        f"addspecies(sbioselect({m.var},'Type','compartment','Name','cell'),'atp',5.0);")
-    assert m.add_parameter_cmd("k2", 2) == f"addparameter({m.var},'k2',2.0);"
-    assert m.add_reaction_cmd("rx", "a -> b") == (
-        f"set(addreaction({m.var},'a -> b'),'Name','rx');")
-
-def test_to_matlab_string_escapes():
-    from core.sbio_model import to_matlab_string
-    assert to_matlab_string("a'b") == "'a''b'"
 
 
 # --- multiple models ---

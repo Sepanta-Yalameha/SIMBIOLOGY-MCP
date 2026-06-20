@@ -3,6 +3,7 @@
 projects/
 CLAUDE.md
 docs/
+.env
 # Python
 **/__pycache__/
 *.pyc

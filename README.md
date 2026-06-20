@@ -78,7 +78,7 @@ A Python-based MCP server that:
 
 - MATLAB R2024a or later
 - SimBiology Toolbox installed
-- Python 3.10–3.12 (recommended: 3.11)
+- Python 3.12 or later
 - Windows operating system
 - MCP-compatible runtime environment (e.g., VSCode MCP client or agent framework)
 

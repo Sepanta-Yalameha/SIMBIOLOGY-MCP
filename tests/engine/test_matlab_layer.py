@@ -46,7 +46,7 @@ def reset_layer():
 
 def test_launch_starts_engine_once(monkeypatch):
     fake = FakeEngine()
-    monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
+    monkeypatch.setattr("engine.matlab_layer._start_matlab", lambda: fake)
 
     layer = MatlabLayer()
     layer.launch()
@@ -59,7 +59,7 @@ def test_launch_starts_engine_once(monkeypatch):
 def test_execute_returns_result(monkeypatch):
     fake = FakeEngine()
     fake.result = 2
-    monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
+    monkeypatch.setattr("engine.matlab_layer._start_matlab", lambda: fake)
 
     layer = MatlabLayer()
     layer.launch()
@@ -71,7 +71,7 @@ def test_execute_returns_result(monkeypatch):
 def test_execute_maps_syntax_error_to_not_found(monkeypatch):
     fake = FakeEngine()
     fake.eval_error = SyntaxError("invalid syntax")
-    monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
+    monkeypatch.setattr("engine.matlab_layer._start_matlab", lambda: fake)
 
     layer = MatlabLayer()
     layer.launch()
@@ -83,7 +83,7 @@ def test_execute_maps_syntax_error_to_not_found(monkeypatch):
 def test_execute_maps_missing_command_text_to_not_found(monkeypatch):
     fake = FakeEngine()
     fake.eval_error = FakeMatlabExecutionError("Undefined function or variable 'x'")
-    monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
+    monkeypatch.setattr("engine.matlab_layer._start_matlab", lambda: fake)
     monkeypatch.setattr("engine.matlab_layer.MatlabExecutionError", FakeMatlabExecutionError)
 
     layer = MatlabLayer()
@@ -96,7 +96,7 @@ def test_execute_maps_missing_command_text_to_not_found(monkeypatch):
 def test_execute_maps_runtime_error_to_failed(monkeypatch):
     fake = FakeEngine()
     fake.eval_error = FakeMatlabExecutionError("division by zero")
-    monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
+    monkeypatch.setattr("engine.matlab_layer._start_matlab", lambda: fake)
     monkeypatch.setattr("engine.matlab_layer.MatlabExecutionError", FakeMatlabExecutionError)
 
     layer = MatlabLayer()
@@ -109,7 +109,7 @@ def test_execute_maps_runtime_error_to_failed(monkeypatch):
 def test_execute_raises_when_engine_not_alive(monkeypatch):
     fake = FakeEngine()
     fake.probe_error = RuntimeError("terminated")
-    monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
+    monkeypatch.setattr("engine.matlab_layer._start_matlab", lambda: fake)
 
     layer = MatlabLayer()
     layer.launch()
@@ -128,7 +128,7 @@ def test_ensure_alive_requires_launch():
 def test_ensure_alive_detects_dead_engine(monkeypatch):
     fake = FakeEngine()
     fake.probe_error = RuntimeError("terminated")
-    monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
+    monkeypatch.setattr("engine.matlab_layer._start_matlab", lambda: fake)
 
     layer = MatlabLayer()
     layer.launch()
@@ -139,7 +139,7 @@ def test_ensure_alive_detects_dead_engine(monkeypatch):
 
 def test_exit_quits_engine(monkeypatch):
     fake = FakeEngine()
-    monkeypatch.setattr("matlab.engine.start_matlab", lambda: fake)
+    monkeypatch.setattr("engine.matlab_layer._start_matlab", lambda: fake)
 
     layer = MatlabLayer()
     layer.launch()
