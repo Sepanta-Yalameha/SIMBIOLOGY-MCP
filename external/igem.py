@@ -9,82 +9,84 @@ from typing import Any
 from igem_registry_api import Client
 
 _IGEM_API_BASE = "https://api.registry.igem.org/v1"
+_PREVIEW_WIDTH = 60
 
 
 def _part_name_to_slug(part_name: str) -> str:
     return part_name.lower().replace("_", "-")
 
 
-def _safe_int(value: Any) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _parse_iso_datetime(value: str | None) -> str | None:
+    """Normalize a registry timestamp to UTC ISO-8601, or pass it through."""
+
     if not value:
         return None
     try:
-        # Preserve a normalized ISO-8601 timestamp if the registry returns one.
         return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
     except ValueError:
         return value
 
 
-def _sequence_stats(sequence: str | None) -> dict[str, Any]:
+def _sequence_stats(sequence: str) -> dict[str, Any]:
+    """Base composition for a DNA/RNA sequence (empty dict when absent)."""
+
     if not sequence:
         return {}
     seq = sequence.upper()
-    length = len(seq)
-    gc = sum(1 for base in seq if base in {"G", "C"})
-    at = sum(1 for base in seq if base in {"A", "T"})
-    stats: dict[str, Any] = {
-        "sequence_length": length,
-        "gc_count": gc,
-        "at_count": at,
-        "gc_fraction": round(gc / length, 4) if length else None,
+    gc = sum(base in "GC" for base in seq)
+    at = sum(base in "AT" for base in seq)
+    return {"gc_count": gc, "at_count": at, "gc_fraction": round(gc / len(seq), 4)}
+
+
+def _preview(sequence: str) -> str:
+    if len(sequence) <= _PREVIEW_WIDTH:
+        return sequence
+    return sequence[:_PREVIEW_WIDTH] + "..."
+
+
+def _role(role: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "uuid": str(role.get("uuid") or ""),
+        "accession": str(role.get("accession") or ""),
+        "label": str(role.get("label") or ""),
+        "deprecated": bool(role.get("deprecated")),
     }
-    return stats
 
 
-def part(part_name: str) -> dict[str, Any]:
-    slug = _part_name_to_slug(part_name)
+def _fetch_part(slug: str) -> dict[str, Any]:
     client = Client(base=_IGEM_API_BASE)
     response = client.session.get(f"{client.base}/parts/slugs/{slug}", timeout=30.0)
     response.raise_for_status()
-    record = response.json()
-    sequence = record.get("sequence")
+    return response.json()
+
+
+def part(part_name: str) -> dict[str, Any]:
+    """Fetch an iGEM part and return a normalized record."""
+
+    slug = _part_name_to_slug(part_name)
+    record = _fetch_part(slug)
+    sequence = str(record.get("sequence") or "")
     audit = record.get("audit") or {}
-    role = record.get("role") or {}
     chassis = record.get("chassis") or {}
-    designed_for = chassis.get("designedFor") or []
-    characterised_in = chassis.get("characterisedIn") or []
-    content = json.dumps(record, ensure_ascii=True, sort_keys=True)
     return {
         "part": part_name,
+        "slug": str(record.get("slug") or slug),
+        "url": f"https://registry.igem.org/parts/{slug}",
         "title": str(record.get("title") or ""),
         "description": str(record.get("description") or ""),
         "status": str(record.get("status") or ""),
         "source": str(record.get("source") or ""),
-        "slug": str(record.get("slug") or slug),
-        "url": f"https://registry.igem.org/parts/{slug}",
-        "sequence": str(sequence or ""),
-        "sequence_length": _safe_int(len(sequence)) if sequence else None,
-        "sequence_preview": str(sequence[:60]) + ("..." if sequence and len(sequence) > 60 else "") if sequence else "",
+        "sequence": sequence,
+        "sequence_length": len(sequence),
+        "sequence_preview": _preview(sequence),
         "sequence_stats": _sequence_stats(sequence),
         "created": _parse_iso_datetime(audit.get("created")),
         "updated": _parse_iso_datetime(audit.get("updated")),
-        "role": {
-            "uuid": str(role.get("uuid") or ""),
-            "accession": str(role.get("accession") or ""),
-            "label": str(role.get("label") or ""),
-            "deprecated": bool(role.get("deprecated")) if role else False,
-        },
+        "role": _role(record.get("role") or {}),
         "license_uuid": str(record.get("licenseUUID") or ""),
         "chassis": {
-            "designed_for_count": len(designed_for),
-            "characterised_in_count": len(characterised_in),
+            "designed_for_count": len(chassis.get("designedFor") or []),
+            "characterised_in_count": len(chassis.get("characterisedIn") or []),
         },
-        "content": content,
+        "content": json.dumps(record, ensure_ascii=True, sort_keys=True),
     }
