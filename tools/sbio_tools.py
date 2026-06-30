@@ -7,15 +7,14 @@ model, running a command, echoing the result) lives in the helpers below.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Literal
 
 from core.sbio_model import SbioModel
 from core.sbio_service import SbioService
 from tools.registry import register
 
-SolverType = Literal[
-    "ode15s", "ode23t", "ode45", "sundials", "ssa", "expltau", "impltau"
-]
+SolverType = Literal["ode15s", "ode23t", "ode45", "sundials", "ssa", "expltau", "impltau"]
 
 _service: SbioService | None = None
 
@@ -37,6 +36,13 @@ def _run(command: str) -> None:
     _svc().execute(command)
 
 
+def _add(model_name: str | None, build: Callable[[SbioModel], str], **echo: Any) -> dict[str, Any]:
+    """Run an element-creation command and echo back the created fields."""
+
+    _run(build(_model(model_name)))
+    return echo
+
+
 def _modify(model_name: str | None, kind: str, name: str, **fields: Any) -> dict[str, Any]:
     """Apply the non-None updates to an element via its ``set_<kind>_cmd`` builder."""
 
@@ -51,6 +57,7 @@ def _remove(model_name: str | None, kind: str, name: str) -> dict[str, Any]:
 
     _run(getattr(_model(model_name), f"delete_{kind}_cmd")(name))
     return {"removed": name}
+
 
 # projects
 @register("load_project")
@@ -72,6 +79,7 @@ def save_project(path: str | None = None) -> dict[str, Any]:
     """Save the current SimBiology project."""
     _svc().save_project(path)
     return {"project_path": path or _svc().project_path}
+
 
 # models
 @register("create_model")
@@ -98,6 +106,7 @@ def list_models() -> list[str]:
     """List loaded SimBiology models."""
     return _svc().model_names()
 
+
 # reads
 @register("list_species")
 def list_species(model_name: str | None = None) -> list[str]:
@@ -122,14 +131,14 @@ def list_parameters(model_name: str | None = None) -> list[str]:
     """List parameters in a SimBiology model."""
     return _model(model_name).parameters()
 
+
 # compartments
 @register("create_compartment")
 def create_compartment(name: str, model_name: str | None = None, capacity: float = 1.0) -> dict[str, Any]:
     """Create a compartment in a model."""
-    model = _model(model_name)
-    _run(model.add_compartment_cmd(name))
+    _add(model_name, lambda m: m.add_compartment_cmd(name), name=name, capacity=capacity)
     if capacity != 1.0:
-        _run(model.set_compartment_cmd(name, capacity=capacity))
+        _run(_model(model_name).set_compartment_cmd(name, capacity=capacity))
     return {"name": name, "capacity": capacity}
 
 
@@ -144,12 +153,13 @@ def remove_compartment(name: str, model_name: str | None = None) -> dict[str, An
     """Remove a compartment from a model."""
     return _remove(model_name, "compartment", name)
 
+
 # species
 @register("create_species")
 def create_species(name: str, compartment: str, value: float = 0.0, model_name: str | None = None) -> dict[str, Any]:
     """Create a species in a model."""
-    _run(_model(model_name).add_species_cmd(compartment, name, value))
-    return {"name": name, "compartment": compartment, "value": value}
+    return _add(model_name, lambda m: m.add_species_cmd(compartment, name, value), name=name, compartment=compartment, value=value)
+
 
 @register("modify_species")
 def modify_species(name: str, model_name: str | None = None, value: float | None = None, units: str | None = None) -> dict[str, Any]:
@@ -162,12 +172,13 @@ def remove_species(name: str, model_name: str | None = None) -> dict[str, Any]:
     """Remove a species from a model."""
     return _remove(model_name, "species", name)
 
+
 # reactions
 @register("create_reaction")
 def create_reaction(name: str, equation: str, model_name: str | None = None) -> dict[str, Any]:
     """Create a reaction in a model."""
-    _run(_model(model_name).add_reaction_cmd(name, equation))
-    return {"name": name, "reaction": equation}
+    return _add(model_name, lambda m: m.add_reaction_cmd(name, equation), name=name, reaction=equation)
+
 
 @register("modify_reaction")
 def modify_reaction(name: str, model_name: str | None = None, equation: str | None = None, reversible: bool | None = None) -> dict[str, Any]:
@@ -180,12 +191,13 @@ def remove_reaction(name: str, model_name: str | None = None) -> dict[str, Any]:
     """Remove a reaction from a model."""
     return _remove(model_name, "reaction", name)
 
+
 # parameters
 @register("create_parameter")
 def create_parameter(name: str, value: float, model_name: str | None = None) -> dict[str, Any]:
     """Create a parameter in a model."""
-    _run(_model(model_name).add_parameter_cmd(name, value))
-    return {"name": name, "value": value}
+    return _add(model_name, lambda m: m.add_parameter_cmd(name, value), name=name, value=value)
+
 
 @register("modify_parameter")
 def modify_parameter(name: str, model_name: str | None = None, value: float | None = None, units: str | None = None) -> dict[str, Any]:
@@ -197,6 +209,7 @@ def modify_parameter(name: str, model_name: str | None = None, value: float | No
 def remove_parameter(name: str, model_name: str | None = None) -> dict[str, Any]:
     """Remove a parameter from a model."""
     return _remove(model_name, "parameter", name)
+
 
 # simulation
 @register("get_simulation_settings")
