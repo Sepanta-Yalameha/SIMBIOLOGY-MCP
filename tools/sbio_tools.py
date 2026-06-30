@@ -7,7 +7,6 @@ model, running a command, echoing the result) lives in the helpers below.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any, Literal
 
 from core.sbio_model import SbioModel
@@ -38,13 +37,6 @@ def _run(command: str) -> None:
     _svc().execute(command)
 
 
-def _add(model_name: str | None, build: Callable[[SbioModel], str], **echo: Any) -> dict[str, Any]:
-    """Run an element-creation command and echo back the created fields."""
-
-    _run(build(_model(model_name)))
-    return echo
-
-
 def _modify(model_name: str | None, kind: str, name: str, **fields: Any) -> dict[str, Any]:
     """Apply the non-None updates to an element via its ``set_<kind>_cmd`` builder."""
 
@@ -60,8 +52,7 @@ def _remove(model_name: str | None, kind: str, name: str) -> dict[str, Any]:
     _run(getattr(_model(model_name), f"delete_{kind}_cmd")(name))
     return {"removed": name}
 
-
-# --- projects ---
+# projects
 @register("load_project")
 def load_project(path: str) -> dict[str, Any]:
     """Load a SimBiology project."""
@@ -82,8 +73,7 @@ def save_project(path: str | None = None) -> dict[str, Any]:
     _svc().save_project(path)
     return {"project_path": path or _svc().project_path}
 
-
-# --- models ---
+# models
 @register("create_model")
 def create_model(name: str) -> dict[str, Any]:
     """Create a SimBiology model."""
@@ -108,8 +98,7 @@ def list_models() -> list[str]:
     """List loaded SimBiology models."""
     return _svc().model_names()
 
-
-# --- element listing ---
+# reads
 @register("list_species")
 def list_species(model_name: str | None = None) -> list[str]:
     """List species in a SimBiology model."""
@@ -133,8 +122,7 @@ def list_parameters(model_name: str | None = None) -> list[str]:
     """List parameters in a SimBiology model."""
     return _model(model_name).parameters()
 
-
-# --- compartments ---
+# compartments
 @register("create_compartment")
 def create_compartment(name: str, model_name: str | None = None, capacity: float = 1.0) -> dict[str, Any]:
     """Create a compartment in a model."""
@@ -156,14 +144,12 @@ def remove_compartment(name: str, model_name: str | None = None) -> dict[str, An
     """Remove a compartment from a model."""
     return _remove(model_name, "compartment", name)
 
-
-# --- species ---
+# species
 @register("create_species")
 def create_species(name: str, compartment: str, value: float = 0.0, model_name: str | None = None) -> dict[str, Any]:
     """Create a species in a model."""
-    return _add(model_name, lambda m: m.add_species_cmd(compartment, name, value),
-                name=name, compartment=compartment, value=value)
-
+    _run(_model(model_name).add_species_cmd(compartment, name, value))
+    return {"name": name, "compartment": compartment, "value": value}
 
 @register("modify_species")
 def modify_species(name: str, model_name: str | None = None, value: float | None = None, units: str | None = None) -> dict[str, Any]:
@@ -176,14 +162,12 @@ def remove_species(name: str, model_name: str | None = None) -> dict[str, Any]:
     """Remove a species from a model."""
     return _remove(model_name, "species", name)
 
-
-# --- reactions ---
+# reactions
 @register("create_reaction")
 def create_reaction(name: str, equation: str, model_name: str | None = None) -> dict[str, Any]:
     """Create a reaction in a model."""
-    return _add(model_name, lambda m: m.add_reaction_cmd(name, equation),
-                name=name, reaction=equation)
-
+    _run(_model(model_name).add_reaction_cmd(name, equation))
+    return {"name": name, "reaction": equation}
 
 @register("modify_reaction")
 def modify_reaction(name: str, model_name: str | None = None, equation: str | None = None, reversible: bool | None = None) -> dict[str, Any]:
@@ -196,14 +180,12 @@ def remove_reaction(name: str, model_name: str | None = None) -> dict[str, Any]:
     """Remove a reaction from a model."""
     return _remove(model_name, "reaction", name)
 
-
-# --- parameters ---
+# parameters
 @register("create_parameter")
 def create_parameter(name: str, value: float, model_name: str | None = None) -> dict[str, Any]:
     """Create a parameter in a model."""
-    return _add(model_name, lambda m: m.add_parameter_cmd(name, value),
-                name=name, value=value)
-
+    _run(_model(model_name).add_parameter_cmd(name, value))
+    return {"name": name, "value": value}
 
 @register("modify_parameter")
 def modify_parameter(name: str, model_name: str | None = None, value: float | None = None, units: str | None = None) -> dict[str, Any]:
@@ -216,8 +198,7 @@ def remove_parameter(name: str, model_name: str | None = None) -> dict[str, Any]
     """Remove a parameter from a model."""
     return _remove(model_name, "parameter", name)
 
-
-# --- simulation ---
+# simulation
 @register("get_simulation_settings")
 def get_simulation_settings(model_name: str | None = None) -> dict[str, Any]:
     """Get the current simulation settings (configset) for a model."""
