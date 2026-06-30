@@ -37,6 +37,15 @@ def _split_reaction_spec(equation: str) -> tuple[str, str | None]:
     return reaction, rate
 
 
+def _format_reaction_rate(rate: str) -> str:
+    """Render a reaction rate as a MATLAB numeric literal when possible."""
+
+    try:
+        return to_matlab_number(float(rate))
+    except ValueError:
+        return to_matlab_string(rate)
+
+
 def _finite_or_none(value: Any) -> Any:
     """Collapse non-finite floats (Inf/NaN) to None so results stay JSON-safe."""
 
@@ -165,7 +174,7 @@ class SbioModel:
     def add_reaction_cmd(self, name: str, equation: str) -> str:
         reaction, rate = _split_reaction_spec(equation)
         command = f"rxnObj = addreaction({self.var},{to_matlab_string(reaction)}); set(rxnObj,'Name',{to_matlab_string(name)});"
-        return command if rate is None else f"{command} rxnObj.ReactionRate = {to_matlab_string(rate)};"
+        return command if rate is None else f"{command} rxnObj.ReactionRate = {_format_reaction_rate(rate)};"
 
     def add_compartment_cmd(self, name: str) -> str:
         return f"addcompartment({self.var},{to_matlab_string(name)});"

@@ -8,9 +8,12 @@ model, running a command, echoing the result) lives in the helpers below.
 from __future__ import annotations
 
 from collections.abc import Callable
+from io import StringIO
+import csv
+from pathlib import Path
 from typing import Any, Literal
 
-from core.sbio_model import SbioModel
+from core.sbio_model import SbioModel, to_matlab_string
 from core.sbio_service import SbioService
 from tools.registry import register
 
@@ -260,3 +263,38 @@ def simulate_model(
     logged state.
     """
     return _model(model_name).simulate(species=species)
+
+
+@register("export_graph")
+def export_graph(
+    model_name: str | None = None,
+    path: str | None = None,
+    resolution: int = 300,
+) -> dict[str, Any]:
+    """Export the SimBiology plot as a PNG image."""
+
+    model = _model(model_name)
+    target = Path(path or "simbiology_plot.png")
+    _svc().execute(f"sim_data = sbiosimulate({model.var});")
+    _svc().execute("axes_handle = sbioplot(sim_data);")
+    _svc().execute("fig_handle = get(axes_handle, 'Parent');")
+    _svc().execute(f"exportgraphics(fig_handle, {to_matlab_string(str(target))}, 'Resolution', {int(resolution)});")
+    return {"path": str(target), "resolution": int(resolution)}
+
+
+@register("export_csv")
+def export_csv(model_name: str | None = None) -> dict[str, Any]:
+    """Export the model inventory as CSV text."""
+
+    model = _model(model_name)
+    rows = [
+        ("kind", "name"),
+        *[("species", name) for name in model.species()],
+        *[("reaction", name) for name in model.reactions()],
+        *[("compartment", name) for name in model.compartments()],
+        *[("parameter", name) for name in model.parameters()],
+    ]
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerows(rows)
+    return {"csv": buffer.getvalue()}

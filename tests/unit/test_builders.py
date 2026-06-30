@@ -64,6 +64,12 @@ def test_add_reaction_cmd_with_rate(model):
         "rxnObj.ReactionRate = 'k * a';")
 
 
+def test_add_reaction_cmd_with_numeric_rate(model):
+    assert model.add_reaction_cmd("rx", "a -> b; 1") == (
+        "rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); "
+        "rxnObj.ReactionRate = 1.0;")
+
+
 # --- delete / rename builders ---
 def test_delete_cmds(model):
     assert model.delete_species_cmd("glucose") == (
