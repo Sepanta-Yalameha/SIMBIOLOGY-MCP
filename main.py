@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from interfaces.mcp_server import build_server
+from interfaces.mcp_server import run
 
 if __name__ == "__main__":
-    mcp = build_server()
-    mcp.run()
+    run()

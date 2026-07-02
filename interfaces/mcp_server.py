@@ -14,3 +14,9 @@ def build_server() -> FastMCP:
     for tool_fn in TOOLS.values():
         mcp.add_tool(tool_fn)
     return mcp
+
+
+def run() -> None:
+    """Console-script entry point: build the server and serve it."""
+
+    build_server().run()

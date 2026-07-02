@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simbiology-mcp"
+version = "0.1.0"
+description = "Model Context Protocol server for MATLAB SimBiology: build, modify, simulate, and export systems-biology models from AI agents."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Sepanta Yalameha", email = "sepantayalameha2006@gmail.com" }]
+keywords = ["mcp", "simbiology", "matlab", "systems-biology", "pk-pd", "modeling"]
+
+# Direct runtime dependencies only. The fully pinned transitive closure lives in
+# requirements.txt, which setup_venv.ps1 uses to build a reproducible venv.
+dependencies = [
+    "fastmcp>=3.4,<4",
+    "httpx>=0.28",
+    "python-dotenv>=1.2",
+    "igem-registry-api>=0.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+# 'matlab' pulls matlabengine from PyPI, whose version must match your installed
+# MATLAB release. On Windows, setup_venv.ps1 installs it straight from your local
+# MATLAB instead; prefer that unless you know the PyPI version lines up.
+matlab = ["matlabengine"]
+
+[project.scripts]
+simbiology-mcp = "interfaces.mcp_server:run"
+
+[tool.setuptools]
+# Flat layout: the server's top-level packages, listed explicitly.
+packages = ["core", "engine", "external", "interfaces", "tools"]
