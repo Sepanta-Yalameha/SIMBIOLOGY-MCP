@@ -86,7 +86,115 @@ A Python-based MCP server that:
 
 ## Installation
 
-Run the setup script to configure the environment:
+Run the setup script from the project root. It detects your MATLAB and Python
+installs, creates a `.venv`, installs the pinned dependencies from
+`requirements.txt`, and installs the MATLAB Engine for Python that matches your
+MATLAB release:
 
 ```powershell
 .\setup_venv.ps1
+```
+
+To skip the interactive prompts, pass explicit indices or paths:
+
+```powershell
+.\setup_venv.ps1 -MatlabIndex 0 -PythonIndex 0
+```
+
+### Installing the server as a package (optional)
+
+The project ships a `pyproject.toml`, so once the venv exists you can install the
+server itself as an editable package. This puts its packages on the import path
+(no need to set `PYTHONPATH`) and registers a `simbiology-mcp` command:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e .
+```
+
+---
+
+## Usage
+
+Start the server over stdio, either through the repo entry point or the installed
+command:
+
+```powershell
+# from the repo, with the packages importable
+$env:PYTHONPATH = (Get-Location).Path
+.\.venv\Scripts\python.exe .\main.py
+
+# or, after `pip install -e .`
+simbiology-mcp
+```
+
+### Wiring into an MCP client
+
+Point your MCP client at the server command. A typical stdio configuration:
+
+```json
+{
+  "mcpServers": {
+    "simbiology": {
+      "command": "C:/path/to/SIMBIOLOGY-MCP/.venv/Scripts/python.exe",
+      "args": ["C:/path/to/SIMBIOLOGY-MCP/main.py"],
+      "env": { "PYTHONPATH": "C:/path/to/SIMBIOLOGY-MCP" }
+    }
+  }
+}
+```
+
+The MATLAB engine starts lazily on the first tool call that needs it, so client
+startup stays fast.
+
+### External API keys
+
+PubMed works without a key but is rate-limited. To raise the limit, copy
+`.env.example` to `.env` and set `NCBI_API_KEY`.
+
+---
+
+## Tools
+
+The server exposes its capabilities as MCP tools, grouped by area:
+
+- **Projects:** `load_project`, `create_project`, `save_project`
+- **Models:** `create_model`, `rename_model`, `remove_model`, `list_models`
+- **Model elements:** `create_*`, `modify_*`, `remove_*`, and `list_*` for
+  compartments, species, reactions, and parameters
+- **Simulation:** `get_simulation_settings`, `configure_simulation`,
+  `simulate_model`
+- **Export:** `export_graph` (PNG plot), `export_csv` (model inventory)
+- **Literature and parts:** `pubmed_search`, `pubmed_summary`, `pubmed_article`,
+  `igem_part`
+
+---
+
+## Project layout
+
+```
+core/        SimBiology session, per-model reads, and command builders
+engine/      Singleton MATLAB engine wrapper and error types
+tools/       MCP tool definitions and the shared registry
+external/    PubMed and iGEM API wrappers
+interfaces/  FastMCP server wiring
+examples/    Runnable demos (e.g. demo_simulation.py)
+tests/       Unit tests plus MATLAB/live integration tests
+```
+
+---
+
+## Development
+
+Run the hermetic test suite (no MATLAB or network required):
+
+```powershell
+$env:PYTHONPATH = (Get-Location).Path
+.\.venv\Scripts\python.exe -m pytest -m "not matlab and not live"
+```
+
+Integration tests are opt-in:
+
+- `matlab`-marked tests run automatically when the MATLAB Engine is importable.
+- `live`-marked tests hit external APIs and run only with `--run-live`.
+
+CI runs the hermetic subset on every push and pull request.

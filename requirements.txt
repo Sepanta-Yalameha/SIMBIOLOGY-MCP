@@ -4,7 +4,6 @@ anyio==4.13.0
 attrs==26.1.0
 Authlib==1.7.2
 beartype==0.22.9
-biopython==1.87
 cachetools==7.1.4
 caio==0.9.25
 certifi==2026.5.20
@@ -62,7 +61,6 @@ python-dotenv==1.2.2
 python-multipart==0.0.32
 pywin32==312
 pywin32-ctypes==0.2.3
-PyYAML==6.0.3
 referencing==0.37.0
 requests==2.34.2
 rich==15.0.0
