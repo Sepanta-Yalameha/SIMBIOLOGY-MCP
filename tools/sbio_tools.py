@@ -13,7 +13,7 @@ import csv
 from pathlib import Path
 from typing import Any, Literal
 
-from core.sbio_model import SbioModel, to_matlab_string
+from core.sbio_model import SbioModel, build_reaction_equation, to_matlab_string
 from core.sbio_service import SbioService
 from tools.registry import register
 
@@ -178,15 +178,48 @@ def remove_species(name: str, model_name: str | None = None) -> dict[str, Any]:
 
 # reactions
 @register("create_reaction")
-def create_reaction(name: str, equation: str, model_name: str | None = None) -> dict[str, Any]:
-    """Create a reaction in a model."""
-    return _add(model_name, lambda m: m.add_reaction_cmd(name, equation), name=name, reaction=equation)
+def create_reaction(
+    name: str,
+    model_name: str | None = None,
+    left: str = "",
+    right: str = "",
+    reversible: bool = False,
+    rate: str | None = None,
+) -> dict[str, Any]:
+    """Create a reaction in a model.
+
+    Use plain left/right reaction strings. Use ``null`` explicitly for sources
+    or sinks. Keep ``rate`` as a raw kinetic expression string.
+    """
+
+    equation = build_reaction_equation(left, right, reversible=reversible)
+    if rate is not None:
+        equation = f"{equation}; {rate}"
+    return _add(model_name, lambda m: m.add_reaction_cmd(name, equation), name=name, left=left, right=right, reversible=reversible, rate=rate)
 
 
 @register("modify_reaction")
-def modify_reaction(name: str, model_name: str | None = None, equation: str | None = None, reversible: bool | None = None) -> dict[str, Any]:
-    """Modify a reaction in a model."""
-    return _modify(model_name, "reaction", name, reaction=equation, reversible=reversible)
+def modify_reaction(
+    name: str,
+    model_name: str | None = None,
+    left: str = "",
+    right: str = "",
+    reversible: bool | None = None,
+    rate: str | None = None,
+) -> dict[str, Any]:
+    """Modify a reaction in a model.
+
+    Use plain left/right reaction strings. The rate stays a raw kinetic
+    expression string.
+    """
+
+    equation = build_reaction_equation(left, right, reversible=bool(reversible))
+    data: dict[str, Any] = {"reaction": equation}
+    if reversible is not None:
+        data["reversible"] = reversible
+    if rate is not None:
+        data["rate"] = rate
+    return _modify(model_name, "reaction", name, **data)
 
 
 @register("remove_reaction")

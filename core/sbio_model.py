@@ -37,6 +37,17 @@ def _split_reaction_spec(equation: str) -> tuple[str, str | None]:
     return reaction, rate
 
 
+def build_reaction_equation(
+    left: str,
+    right: str,
+    reversible: bool = False,
+) -> str:
+    """Build a SimBiology reaction equation from left/right strings."""
+
+    arrow = "<->" if reversible else "->"
+    return f"{left.strip()} {arrow} {right.strip()}"
+
+
 def _format_reaction_rate(rate: str) -> str:
     """Render a reaction rate as a MATLAB numeric literal when possible."""
 
@@ -94,7 +105,7 @@ _LIST_PROPS = {"species": "Species", "reaction": "Reactions", "compartment": "Co
 
 _FIELD_ATTRS: dict[str, dict[str, str]] = {
     "species": {"name": "Name", "value": "Value", "units": "InitialAmountUnits"},
-    "reaction": {"name": "Name", "reaction": "Reaction", "reversible": "Reversible"},
+    "reaction": {"name": "Name", "reaction": "Reaction", "reversible": "Reversible", "rate": "ReactionRate"},
     "compartment": {"name": "Name", "capacity": "Capacity", "units": "CapacityUnits"},
     "parameter": {"name": "Name", "value": "Value", "units": "ValueUnits"},
 }
@@ -227,6 +238,8 @@ class SbioModel:
             attr = _FIELD_ATTRS[kind][key]
             if key == "reversible":
                 value = "true" if bool(value) else "false"
+            elif key == "rate":
+                value = _format_reaction_rate(str(value))
             elif key in {"name", "reaction", "units"} or attr.endswith("Name") or attr.endswith("Units"):
                 value = to_matlab_string(value)
             else:
