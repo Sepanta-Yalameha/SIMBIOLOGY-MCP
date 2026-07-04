@@ -1,4 +1,11 @@
-"""Unit tests for export tools that only verify MATLAB command sequencing."""
+"""Unit tests for the export tools (hermetic; no MATLAB engine).
+
+The export tools delegate simulation to ``SbioModel`` (``export_plot`` and
+``simulate``); these tests use a dummy model to verify the tool-layer contract:
+that the doses/variants/species arguments pass through and that ``export_csv``
+formats a time-course into CSV. The real MATLAB plotting/simulation path is
+covered by the ``matlab``-marked tests.
+"""
 
 from __future__ import annotations
 
@@ -11,53 +18,72 @@ import tools.sbio_tools as sbio_tools
 
 
 class DummyModel:
+    """Records export_plot/simulate calls and returns a canned time-course."""
+
     def __init__(self) -> None:
-        self.var = "m"
+        self.plot_calls: list[dict] = []
+        self.simulate_calls: list[dict] = []
+
+    def export_plot(self, path, resolution=300, species=None, doses=None, variants=None):
+        self.plot_calls.append(
+            {"path": path, "resolution": resolution, "species": species,
+             "doses": doses, "variants": variants})
+        return {"path": path, "resolution": resolution}
+
+    def simulate(self, species=None, doses=None, variants=None):
+        self.simulate_calls.append({"species": species, "doses": doses, "variants": variants})
+        return {
+            "time": [0.0, 1.0, 2.0],
+            "time_units": "second",
+            "names": ["A", "B"],
+            "data": {"A": [10.0, 6.0, 3.0], "B": [0.0, 4.0, 7.0]},
+        }
 
 
-class DummyService:
-    def __init__(self) -> None:
-        self.commands: list[str] = []
-        self.model = DummyModel()
-
-    def get_model(self, name=None):  # noqa: ANN001
-        return self.model
-
-    def execute(self, command: str, nargout: int = 0):  # noqa: ANN001
-        self.commands.append(command)
-        return None
+def _install(monkeypatch) -> DummyModel:
+    model = DummyModel()
+    monkeypatch.setattr(sbio_tools, "_model", lambda name=None: model)
+    return model
 
 
-def test_export_graph_uses_matlab_plot_and_export(monkeypatch):
-    svc = DummyService()
-    monkeypatch.setattr(sbio_tools, "_service", svc)
+def test_export_graph_delegates_to_export_plot(monkeypatch):
+    model = _install(monkeypatch)
 
-    result = sbio_tools.export_graph(path="out.png", resolution=600)
+    result = sbio_tools.export_graph(
+        path="out.png", resolution=600, species=["A"], doses=["d1"], variants=["v1"])
 
     assert result == {"path": "out.png", "resolution": 600}
-    assert svc.commands == [
-        "sim_data = sbiosimulate(m);",
-        "axes_handle = sbioplot(sim_data);",
-        "fig_handle = get(axes_handle, 'Parent');",
-        "exportgraphics(fig_handle, 'out.png', 'Resolution', 600);",
+    assert model.plot_calls == [
+        {"path": "out.png", "resolution": 600, "species": ["A"], "doses": ["d1"], "variants": ["v1"]}
     ]
 
 
-def test_export_csv_returns_inventory(monkeypatch):
-    svc = DummyService()
-    monkeypatch.setattr(sbio_tools, "_model", lambda name=None: svc.model)
-    svc.model.species = lambda: ["s1", "s2"]  # type: ignore[attr-defined]
-    svc.model.reactions = lambda: ["r1"]  # type: ignore[attr-defined]
-    svc.model.compartments = lambda: ["c1"]  # type: ignore[attr-defined]
-    svc.model.parameters = lambda: ["k1"]  # type: ignore[attr-defined]
+def test_export_graph_default_path(monkeypatch):
+    model = _install(monkeypatch)
+
+    result = sbio_tools.export_graph()
+
+    assert result["path"] == "simbiology_plot.png"
+    assert model.plot_calls[0]["path"] == "simbiology_plot.png"
+    assert model.plot_calls[0]["doses"] is None
+
+
+def test_export_csv_returns_timecourse(monkeypatch):
+    _install(monkeypatch)
 
     result = sbio_tools.export_csv()
 
     assert result["csv"].splitlines() == [
-        "kind,name",
-        "species,s1",
-        "species,s2",
-        "reaction,r1",
-        "compartment,c1",
-        "parameter,k1",
+        "time,A,B",
+        "0.0,10.0,0.0",
+        "1.0,6.0,4.0",
+        "2.0,3.0,7.0",
     ]
+
+
+def test_export_csv_passes_through_doses_variants_species(monkeypatch):
+    model = _install(monkeypatch)
+
+    sbio_tools.export_csv(species=["A"], doses=["d1"], variants=["v1"])
+
+    assert model.simulate_calls == [{"species": ["A"], "doses": ["d1"], "variants": ["v1"]}]

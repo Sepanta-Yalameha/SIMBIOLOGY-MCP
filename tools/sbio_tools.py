@@ -13,7 +13,7 @@ import csv
 from pathlib import Path
 from typing import Any, Literal
 
-from core.sbio_model import SbioModel, build_reaction_equation, to_matlab_string
+from core.sbio_model import SbioModel, build_reaction_equation
 from core.sbio_service import SbioService
 from tools.registry import register
 
@@ -464,31 +464,41 @@ def export_graph(
     model_name: str | None = None,
     path: str | None = None,
     resolution: int = 300,
+    species: list[str] | None = None,
+    doses: list[str] | None = None,
+    variants: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Export the SimBiology plot as a PNG image."""
+    """Simulate the model and export the plot as a PNG image.
 
-    model = _model(model_name)
+    Honors the same ``species``, ``doses``, and ``variants`` as
+    ``simulate_model`` (applied by name for this run), so the exported figure
+    reflects exactly that simulation rather than a bare re-run.
+    """
+
     target = Path(path or "simbiology_plot.png")
-    _svc().execute(f"sim_data = sbiosimulate({model.var});")
-    _svc().execute("axes_handle = sbioplot(sim_data);")
-    _svc().execute("fig_handle = get(axes_handle, 'Parent');")
-    _svc().execute(f"exportgraphics(fig_handle, {to_matlab_string(str(target))}, 'Resolution', {int(resolution)});")
-    return {"path": str(target), "resolution": int(resolution)}
+    return _model(model_name).export_plot(
+        str(target), resolution=resolution, species=species, doses=doses, variants=variants)
 
 
 @register("export_csv")
-def export_csv(model_name: str | None = None) -> dict[str, Any]:
-    """Export the model inventory as CSV text."""
+def export_csv(
+    model_name: str | None = None,
+    species: list[str] | None = None,
+    doses: list[str] | None = None,
+    variants: list[str] | None = None,
+) -> dict[str, Any]:
+    """Export the simulation time-course as CSV text.
 
-    model = _model(model_name)
-    rows = [
-        ("kind", "name"),
-        *[("species", name) for name in model.species()],
-        *[("reaction", name) for name in model.reactions()],
-        *[("compartment", name) for name in model.compartments()],
-        *[("parameter", name) for name in model.parameters()],
-    ]
+    Runs a simulation (honoring the same ``species``, ``doses``, and
+    ``variants`` as ``simulate_model``) and returns CSV with a ``time`` column
+    followed by one column per logged species.
+    """
+
+    result = _model(model_name).simulate(species=species, doses=doses, variants=variants)
+    names = result["names"]
     buffer = StringIO()
     writer = csv.writer(buffer)
-    writer.writerows(rows)
+    writer.writerow(["time", *names])
+    for index, moment in enumerate(result["time"]):
+        writer.writerow([moment, *(result["data"][name][index] for name in names)])
     return {"csv": buffer.getvalue()}

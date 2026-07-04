@@ -119,3 +119,23 @@ def test_tools_multi_dose_and_variant():
     result = sbio_tools.simulate_model(doses=["b1", "b2"], variants=["hi_start", "fast"])
     assert result["data"]["A"][0] == 20.0            # hi_start variant applied
     assert max(result["data"]["A"]) > 20.0           # at least one bolus stacked on top
+
+
+def test_tools_export_graph_and_csv_end_to_end(tmp_path):
+    _build_decay_model()
+    sbio_tools.create_dose(
+        "bolus", "A", dose_type="repeat", amount=100.0, start_time=5.0, interval=100.0, repeat_count=0)
+
+    # export_graph honors the dose and writes a real PNG
+    out = tmp_path / "plot.png"
+    assert sbio_tools.export_graph(path=str(out), doses=["bolus"]) == {
+        "path": str(out), "resolution": 300}
+    assert out.exists() and out.stat().st_size > 0
+
+    # export_csv returns real time-course; the dose raises A's peak
+    header = sbio_tools.export_csv()["csv"].splitlines()[0]
+    assert header == "time,A,B"
+    base_peak = max(float(r.split(",")[1]) for r in sbio_tools.export_csv()["csv"].splitlines()[1:])
+    dosed_peak = max(
+        float(r.split(",")[1]) for r in sbio_tools.export_csv(doses=["bolus"])["csv"].splitlines()[1:])
+    assert dosed_peak > base_peak
