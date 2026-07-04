@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
-from tools.registry import TOOLS
+from tools import TOOLS
 
 
 def build_server() -> FastMCP:
