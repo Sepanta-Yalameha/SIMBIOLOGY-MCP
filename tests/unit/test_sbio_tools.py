@@ -268,6 +268,18 @@ def test_structure_tools_issue_expected_commands(svc: DummyService) -> None:
     ]
 
 
+def test_modify_reaction_partial_edit_keeps_stoichiometry(svc: DummyService) -> None:
+    # Regression: left/right default to "", so modify_reaction used to always
+    # rewrite the equation, wiping the stoichiometry to " -> " when a caller
+    # changed only the rate or reversibility.
+    assert sbio_tools.modify_reaction("rx1", rate="k*A") == {"name": "rx1", "rate": "k*A"}
+    assert sbio_tools.modify_reaction("rx1", reversible=True) == {"name": "rx1", "reversible": True}
+    assert svc.commands == [
+        "set_reaction:rx1:{'rate': 'k*A'}",
+        "set_reaction:rx1:{'reversible': True}",
+    ]
+
+
 def test_simulation_and_export_tools(svc: DummyService) -> None:
     assert sbio_tools.get_simulation_settings() == {"StopTime": 10.0, "SolverType": "ode15s"}
     assert sbio_tools.configure_simulation(stop_time=5.0, solver_type="ode45") == {

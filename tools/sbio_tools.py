@@ -209,12 +209,14 @@ def modify_reaction(
 ) -> dict[str, Any]:
     """Modify a reaction in a model.
 
-    Use plain left/right reaction strings. The rate stays a raw kinetic
+    Pass ``left``/``right`` only when changing the stoichiometry; omit them to
+    change just ``reversible`` or ``rate``. The rate stays a raw kinetic
     expression string.
     """
 
-    equation = build_reaction_equation(left, right, reversible=bool(reversible))
-    data: dict[str, Any] = {"reaction": equation}
+    data: dict[str, Any] = {}
+    if left or right:
+        data["reaction"] = build_reaction_equation(left, right, reversible=bool(reversible))
     if reversible is not None:
         data["reversible"] = reversible
     if rate is not None:
