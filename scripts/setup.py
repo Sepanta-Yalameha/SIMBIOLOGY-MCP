@@ -2,8 +2,10 @@
 
 import argparse
 import glob
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -76,8 +78,25 @@ def main():
     if not engine_dir.exists():
         sys.exit(f"MATLAB engine path not found: {engine_dir}")
 
+    build_temp = Path(tempfile.gettempdir()) / "matlab_engine_build"
+    shutil.rmtree(build_temp, ignore_errors=True)
+    build_temp.mkdir(parents=True)
+
+    # uv can install prebuilt wheels (setuptools, wheel) without needing pip
+    # present in the target venv at all.
+    subprocess.run(
+        ["uv", "pip", "install", "--python", sys.executable, "setuptools", "wheel"],
+        check=True,
+    )
+
+    # Build IN PLACE inside the real MATLAB folder (matlabengine's setup.py
+    # validates the install via paths relative to its own location, so it
+    # can't be copied elsewhere first). Only the build/egg-info/record
+    # artifacts are redirected to TEMP, since Program Files isn't writable
+    # without admin.
     result = subprocess.run(
-        ["uv", "pip", "install", "--python", sys.executable, str(engine_dir)],
+        [sys.executable, "setup.py", "build", "--build-base", str(build_temp), "egg_info", "--egg-base", str(build_temp), "install", "--record", str(build_temp / "record.txt")],
+        cwd=engine_dir,
     )
     if result.returncode != 0:
         sys.exit(f"Install failed (exit {result.returncode}).")
