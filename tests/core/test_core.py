@@ -227,6 +227,81 @@ def test_simulate_unknown_dose_raises(simulatable_project):
         _loaded(simulatable_project).get_model().simulate(doses=["nope"])
 
 
+# --- schedule/infusion/content round-trips and multi-element arrays (real engine) ---
+def _flatten(obj):
+    """Recursively flatten nested MATLAB cell results (lists/tuples) to a flat list."""
+    if isinstance(obj, (list, tuple)):
+        out = []
+        for item in obj:
+            out.extend(_flatten(item))
+        return out
+    return [obj]
+
+
+def test_schedule_dose_vectors_round_trip(sample_project):
+    svc = _loaded(sample_project)
+    m = svc.get_model()
+    svc.execute(m.add_dose_cmd(
+        "sched", "glucose", dose_type="schedule", times=[0, 5, 10], amounts=[10, 20, 30]))
+    d = m.get_dose("sched")
+    assert d["Type"] == "schedule"
+    assert d["TargetName"] == "glucose"
+    # the numeric column vectors landed in MATLAB, in order
+    svc.execute(f"sbio_probe = getdose({m.var},'sched');")
+    assert svc.execute("sbio_probe.Time(1)", nargout=1) == 0.0
+    assert svc.execute("sbio_probe.Time(3)", nargout=1) == 10.0
+    assert svc.execute("sbio_probe.Amount(2)", nargout=1) == 20.0
+
+
+def test_repeat_infusion_dose_round_trip(sample_project):
+    # rate > 0 makes it a zero-order infusion rather than a bolus
+    svc = _loaded(sample_project)
+    m = svc.get_model()
+    svc.execute(m.add_dose_cmd(
+        "inf", "glucose", dose_type="repeat", amount=50, rate=10, start_time=0))
+    d = m.get_dose("inf")
+    assert d["Type"] == "repeat"
+    assert d["Amount"] == 50.0
+    assert d["Rate"] == 10.0
+
+
+def test_variant_content_round_trip(sample_project):
+    v = _loaded(sample_project).get_model().get_variant("v1")
+    assert v["Name"] == "v1"
+    flat = _flatten(v["Content"])
+    assert "parameter" in flat and "k1" in flat and "Value" in flat
+    assert 3.0 in flat
+
+
+def test_simulate_with_two_doses(simulatable_project):
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    svc.execute(m.add_dose_cmd(
+        "b1", "A", dose_type="repeat", amount=100, start_time=2, interval=100, repeat_count=0))
+    svc.execute(m.add_dose_cmd(
+        "b2", "A", dose_type="repeat", amount=100, start_time=6, interval=100, repeat_count=0))
+    one = m.simulate(doses=["b1"])
+    two = m.simulate(doses=["b1", "b2"])
+    # a second bolus stacks on the decayed remainder of the first -> higher peak
+    assert max(two["data"]["A"]) > max(one["data"]["A"])
+
+
+def test_simulate_with_two_variants(simulatable_project):
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    svc.execute(m.add_variant_cmd(
+        "hi_start", [{"type": "species", "name": "A", "property": "InitialAmount", "value": 20.0}]))
+    svc.execute(m.add_variant_cmd(
+        "fast", [{"type": "parameter", "name": "k1", "property": "Value", "value": 5.0}]))
+    start_only = m.simulate(variants=["hi_start"])
+    both = m.simulate(variants=["hi_start", "fast"])
+    assert start_only["data"]["A"][0] == 20.0            # species-InitialAmount variant applied
+    assert both["data"]["A"][0] == 20.0                  # first variant still applied within the array
+    assert both["data"]["A"][-1] < start_only["data"]["A"][-1]  # second (fast k1) variant also applied
+
+
 # --- multiple models ---
 def test_get_model_ambiguous_raises(two_model_project):
     svc = SbioService()
