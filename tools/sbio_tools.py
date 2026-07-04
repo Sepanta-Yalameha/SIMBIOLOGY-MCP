@@ -287,17 +287,176 @@ def configure_simulation(
     return model.get_configset()
 
 
+# doses
+@register("create_dose")
+def create_dose(
+    name: str,
+    target: str,
+    model_name: str | None = None,
+    dose_type: str = "repeat",
+    amount: float | None = None,
+    start_time: float | None = None,
+    interval: float | None = None,
+    repeat_count: int | None = None,
+    rate: float | None = None,
+    amount_units: str | None = None,
+    rate_units: str | None = None,
+    time_units: str | None = None,
+    times: list[float] | None = None,
+    amounts: list[float] | None = None,
+    rates: list[float] | None = None,
+) -> dict[str, Any]:
+    """Create a dose targeting a species in a model.
+
+    ``dose_type='repeat'`` uses the scalar fields ``amount``, ``start_time``,
+    ``interval``, ``repeat_count`` (additional doses after the first), and
+    ``rate`` (0 = bolus, >0 = zero-order infusion). ``dose_type='schedule'``
+    uses the paired lists ``times``, ``amounts``, and ``rates``. Note: a model
+    with doses must simulate with an ODE solver (not ssa/expltau/impltau).
+    """
+
+    return _add(
+        model_name,
+        lambda m: m.add_dose_cmd(
+            name,
+            target,
+            dose_type=dose_type,
+            amount=amount,
+            start_time=start_time,
+            interval=interval,
+            repeat_count=repeat_count,
+            rate=rate,
+            amount_units=amount_units,
+            rate_units=rate_units,
+            time_units=time_units,
+            times=times,
+            amounts=amounts,
+            rates=rates,
+        ),
+        name=name,
+        target=target,
+        dose_type=dose_type,
+        amount=amount,
+        start_time=start_time,
+        interval=interval,
+        repeat_count=repeat_count,
+        rate=rate,
+        amount_units=amount_units,
+        rate_units=rate_units,
+        time_units=time_units,
+        times=times,
+        amounts=amounts,
+        rates=rates,
+    )
+
+
+@register("modify_dose")
+def modify_dose(
+    name: str,
+    model_name: str | None = None,
+    target: str | None = None,
+    amount: float | None = None,
+    rate: float | None = None,
+    interval: float | None = None,
+    start_time: float | None = None,
+    repeat_count: int | None = None,
+    amount_units: str | None = None,
+    rate_units: str | None = None,
+    time_units: str | None = None,
+) -> dict[str, Any]:
+    """Modify a repeat dose's scalar fields.
+
+    Only repeat-dose scalar fields are supported. To change a schedule dose (its
+    ``Time``/``Amount``/``Rate`` vectors), remove it and recreate it with
+    ``create_dose``.
+    """
+    return _modify(
+        model_name,
+        "dose",
+        name,
+        target=target,
+        amount=amount,
+        rate=rate,
+        interval=interval,
+        start_time=start_time,
+        repeat_count=repeat_count,
+        amount_units=amount_units,
+        rate_units=rate_units,
+        time_units=time_units,
+    )
+
+
+@register("list_doses")
+def list_doses(model_name: str | None = None) -> list[str]:
+    """List doses in a SimBiology model."""
+    return _model(model_name).doses()
+
+
+@register("remove_dose")
+def remove_dose(name: str, model_name: str | None = None) -> dict[str, Any]:
+    """Remove a dose from a model."""
+    return _remove(model_name, "dose", name)
+
+
+# variants
+@register("create_variant")
+def create_variant(
+    name: str,
+    content: list[dict[str, Any]],
+    model_name: str | None = None,
+) -> dict[str, Any]:
+    """Create a variant in a model.
+
+    ``content`` is a list of dicts, each ``{"type","name","property","value"}``.
+    Type->property: parameter->'Value', species->'InitialAmount',
+    compartment->'Capacity'. A knockout is an entry with ``value`` 0.
+    """
+    return _add(model_name, lambda m: m.add_variant_cmd(name, content), name=name, content=content)
+
+
+@register("modify_variant")
+def modify_variant(
+    name: str,
+    content: list[dict[str, Any]],
+    model_name: str | None = None,
+) -> dict[str, Any]:
+    """Modify a variant, replacing its entire content.
+
+    ``content`` (list of ``{"type","name","property","value"}`` dicts) replaces
+    all existing entries. Must be non-empty (use ``remove_variant`` to delete a
+    variant); an empty list would silently wipe all content.
+    """
+    if not content:
+        raise ValueError("modify_variant replaces all content; provide at least one entry.")
+    return _modify(model_name, "variant", name, content=content)
+
+
+@register("list_variants")
+def list_variants(model_name: str | None = None) -> list[str]:
+    """List variants in a SimBiology model."""
+    return _model(model_name).variants()
+
+
+@register("remove_variant")
+def remove_variant(name: str, model_name: str | None = None) -> dict[str, Any]:
+    """Remove a variant from a model."""
+    return _remove(model_name, "variant", name)
+
+
 @register("simulate_model")
 def simulate_model(
     model_name: str | None = None,
     species: list[str] | None = None,
+    doses: list[str] | None = None,
+    variants: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run a SimBiology model simulation and return time-course results.
 
     If ``species`` is given, only those quantities are returned instead of every
-    logged state.
+    logged state. Named ``doses`` and/or ``variants`` are applied by name for
+    this run (via the 4-arg sbiosimulate), regardless of their Active flag.
     """
-    return _model(model_name).simulate(species=species)
+    return _model(model_name).simulate(species=species, doses=doses, variants=variants)
 
 
 @register("export_graph")

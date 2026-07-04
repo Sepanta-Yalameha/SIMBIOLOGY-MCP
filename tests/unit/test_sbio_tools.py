@@ -47,6 +47,14 @@ SBIO_TOOL_NAMES = {
     "simulate_model",
     "export_graph",
     "export_csv",
+    "create_dose",
+    "modify_dose",
+    "remove_dose",
+    "list_doses",
+    "create_variant",
+    "modify_variant",
+    "remove_variant",
+    "list_variants",
 }
 
 
@@ -70,7 +78,12 @@ class DummyModel:
     def get_configset(self) -> dict[str, object]:
         return {"StopTime": 10.0, "SolverType": "ode15s"}
 
-    def simulate(self, species: list[str] | None = None) -> dict[str, object]:
+    def simulate(
+        self,
+        species: list[str] | None = None,
+        doses: list[str] | None = None,
+        variants: list[str] | None = None,
+    ) -> dict[str, object]:
         names = species or ["S1", "S2"]
         return {"time": [0.0, 1.0], "names": names, "data": {name: [1.0, 0.5] for name in names}}
 
@@ -112,6 +125,30 @@ class DummyModel:
 
     def set_configset_cmd(self, **fields: object) -> str:
         return f"set_configset:{fields!r}"
+
+    def doses(self) -> list[str]:
+        return ["d1"]
+
+    def add_dose_cmd(self, name: str, target: str, **fields: object) -> str:
+        return f"add_dose:{name}:{target}:{fields!r}"
+
+    def set_dose_cmd(self, name: str, **fields: object) -> str:
+        return f"set_dose:{name}:{fields!r}"
+
+    def delete_dose_cmd(self, name: str) -> str:
+        return f"delete_dose:{name}"
+
+    def variants(self) -> list[str]:
+        return ["v1"]
+
+    def add_variant_cmd(self, name: str, content: list) -> str:
+        return f"add_variant:{name}:{content!r}"
+
+    def set_variant_cmd(self, name: str, content: list) -> str:
+        return f"set_variant:{name}:{content!r}"
+
+    def delete_variant_cmd(self, name: str) -> str:
+        return f"delete_variant:{name}"
 
 
 class DummyService:
@@ -278,6 +315,51 @@ def test_modify_reaction_partial_edit_keeps_stoichiometry(svc: DummyService) -> 
         "set_reaction:rx1:{'rate': 'k*A'}",
         "set_reaction:rx1:{'reversible': True}",
     ]
+
+
+def test_dose_and_variant_tools_issue_expected_commands(svc: DummyService) -> None:
+    assert sbio_tools.create_dose(
+        "d1", "drug", dose_type="repeat", amount=100.0, interval=8.0,
+        repeat_count=5, amount_units="milligram") == {
+        "name": "d1", "target": "drug", "dose_type": "repeat", "amount": 100.0,
+        "start_time": None, "interval": 8.0, "repeat_count": 5, "rate": None,
+        "amount_units": "milligram", "rate_units": None, "time_units": None,
+        "times": None, "amounts": None, "rates": None,
+    }
+    assert sbio_tools.modify_dose("d1", amount=200.0, target="drug2") == {
+        "name": "d1", "target": "drug2", "amount": 200.0,
+    }
+    assert sbio_tools.list_doses() == ["d1"]
+    assert sbio_tools.remove_dose("d1") == {"removed": "d1"}
+
+    assert sbio_tools.create_variant(
+        "v1", [{"type": "parameter", "name": "k1", "property": "Value", "value": 0}]) == {
+        "name": "v1",
+        "content": [{"type": "parameter", "name": "k1", "property": "Value", "value": 0}],
+    }
+    assert sbio_tools.modify_variant(
+        "v1", [{"type": "parameter", "name": "k1", "property": "Value", "value": 0.5}]) == {
+        "name": "v1",
+        "content": [{"type": "parameter", "name": "k1", "property": "Value", "value": 0.5}],
+    }
+    assert sbio_tools.list_variants() == ["v1"]
+    assert sbio_tools.remove_variant("v1") == {"removed": "v1"}
+
+    assert svc.commands == [
+        "add_dose:d1:drug:{'dose_type': 'repeat', 'amount': 100.0, 'start_time': None, "
+        "'interval': 8.0, 'repeat_count': 5, 'rate': None, 'amount_units': 'milligram', "
+        "'rate_units': None, 'time_units': None, 'times': None, 'amounts': None, 'rates': None}",
+        "set_dose:d1:{'target': 'drug2', 'amount': 200.0}",
+        "delete_dose:d1",
+        "add_variant:v1:[{'type': 'parameter', 'name': 'k1', 'property': 'Value', 'value': 0}]",
+        "set_variant:v1:[{'type': 'parameter', 'name': 'k1', 'property': 'Value', 'value': 0.5}]",
+        "delete_variant:v1",
+    ]
+
+
+def test_modify_variant_rejects_empty_content(svc: DummyService) -> None:
+    with pytest.raises(ValueError):
+        sbio_tools.modify_variant("v1", [])
 
 
 def test_simulation_and_export_tools(svc: DummyService) -> None:

@@ -29,6 +29,8 @@ def sample_project(tmp_path_factory):
       "addspecies(c,'glucose',10); addspecies(c,'lactate',0); "
       "addparameter(m,'k1',1.5); r=addreaction(m,'glucose -> lactate'); "
       "r.Name='glycolysis';")
+    e("d=adddose(m,'d1','repeat'); d.TargetName='glucose'; d.Amount=100; "
+      "v=addvariant(m,'v1'); addcontent(v,{'parameter','k1','Value',3.0});")
     e(f"sbiosaveproject('{path}','m');")
     return path
 
