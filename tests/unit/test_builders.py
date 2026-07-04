@@ -11,6 +11,7 @@ import pytest
 
 from core.sbio_model import (
     SbioModel,
+    build_reaction_equation,
     _split_reaction_spec,
     to_matlab_number,
     to_matlab_string,
@@ -68,6 +69,14 @@ def test_add_reaction_cmd_with_numeric_rate(model):
     assert model.add_reaction_cmd("rx", "a -> b; 1") == (
         "rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); "
         "rxnObj.ReactionRate = 1.0;")
+
+
+def test_build_reaction_equation_structured():
+    assert build_reaction_equation("mRNA_LacI", "LacI") == "mRNA_LacI -> LacI"
+    assert build_reaction_equation("LuxR + AHL_in", "LuxR_AHL") == "LuxR + AHL_in -> LuxR_AHL"
+    assert build_reaction_equation("null", "mRNA_LacI") == "null -> mRNA_LacI"
+    assert build_reaction_equation("mRNA_LacI", "null") == "mRNA_LacI -> null"
+    assert build_reaction_equation("A", "B", reversible=True) == "A <-> B"
 
 
 # --- delete / rename builders ---

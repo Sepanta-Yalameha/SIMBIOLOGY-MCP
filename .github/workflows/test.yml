@@ -2,19 +2,19 @@ name: Tests
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 jobs:
   test:
     runs-on: windows-latest
+
     env:
       PYTHONPATH: ${{ github.workspace }}
 
     steps:
-      - name: Check out repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -22,22 +22,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        shell: pwsh
+      - name: Install project (with dev deps)
         run: |
-          $ErrorActionPreference = "Stop"
           python -m pip install --upgrade pip
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          Get-Content requirements.txt |
-            Where-Object { $_ -and $_ -notmatch '^(matlabengine|pywin32|pywin32-ctypes)==' } |
-            Set-Content requirements.ci.txt
-          pip install -r requirements.ci.txt
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          pip install pytest
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          pip install -e ".[dev]"
 
       - name: Run tests
-        shell: pwsh
-        # MATLAB Engine and network APIs are unavailable on hosted runners;
-        # the matlab/live integration tests run locally. See conftest.py.
         run: python -m pytest -q -m "not matlab and not live"

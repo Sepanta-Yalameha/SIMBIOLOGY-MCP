@@ -80,10 +80,16 @@ class MatlabLayer:
                 "not found",
             )
             if any(marker in message for marker in missing_markers):
-                raise MatlabCommandNotFoundError(f"MATLAB command not found: {command}") from exc
-            raise MatlabCommandFailedError(f"MATLAB command failed: {command}") from exc
+                raise MatlabCommandNotFoundError(
+                    f"MATLAB command not found: {command}\nMATLAB error: {message}"
+                ) from exc
+            raise MatlabCommandFailedError(
+                f"MATLAB command failed: {command}\nMATLAB error: {message}"
+            ) from exc
         except Exception as exc:
-            raise MatlabCommandFailedError(f"MATLAB command failed: {command}") from exc
+            raise MatlabCommandFailedError(
+                f"MATLAB command failed: {command}\nPython error: {exc}"
+            ) from exc
 
     def ensure_alive(self) -> None:
         """Verify that the MATLAB engine is responsive.
