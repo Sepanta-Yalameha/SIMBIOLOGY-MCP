@@ -1,23 +1,21 @@
-name: Release
+name: Publish to PyPI
 
 on:
-  push:
-    tags:
-      - "v*"
-  workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
-  release:
-    runs-on: windows-latest
-    env:
-      PYTHONPATH: ${{ github.workspace }}
-
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Create release artifact
-        shell: pwsh
-        run: |
-          Write-Host "Tagged release detected."
-          Write-Host "Swap this step for your marketplace publish command if you have one."
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to PyPI
+        run: uv publish
