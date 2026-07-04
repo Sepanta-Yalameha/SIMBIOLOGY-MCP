@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "Model Context Protocol server for MATLAB SimBiology: build, modify, simulate, and export systems-biology models from AI agents."
 readme = "README.md"
 requires-python = ">=3.12"
-authors = [{ name = "Sepanta Yalameha", email = "sepantayalameha2006@gmail.com" }]
+authors = [{ name = "Yojith Sai Biradavolu", email = "yojith23@gmail.com" },
+           { name = "Sepanta Yalameha", email = "sepantayalameha2006@gmail.com" }]
 keywords = ["mcp", "simbiology", "matlab", "systems-biology", "pk-pd", "modeling"]
 
 # Direct runtime dependencies only. The fully pinned transitive closure lives in
@@ -29,7 +30,8 @@ matlab = ["matlabengine"]
 
 [project.scripts]
 simbiology-mcp = "interfaces.mcp_server:run"
+simbiology-mcp-setup = "scripts.setup:main"
 
 [tool.setuptools]
 # Flat layout: the server's top-level packages, listed explicitly.
-packages = ["core", "engine", "external", "interfaces", "tools"]
+packages = ["core", "engine", "external", "interfaces", "scripts", "tools"]
