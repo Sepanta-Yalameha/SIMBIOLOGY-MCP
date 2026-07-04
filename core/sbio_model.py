@@ -116,19 +116,21 @@ def _matlab_variant_value(value: Any) -> str:
 def _matlab_content(content: list[dict[str, Any]]) -> str:
     """Render variant content dicts as a MATLAB cell array of 4-tuples."""
 
-    entries = [
-        "{"
-        + ",".join(
-            (
+    entries = []
+    for entry in content:
+        missing = [key for key in ("type", "name", "property", "value") if key not in entry]
+        if missing:
+            raise ValueError(f"Variant content entry is missing keys {missing}: {entry!r}")
+        entries.append(
+            "{"
+            + ",".join((
                 to_matlab_string(entry["type"]),
                 to_matlab_string(entry["name"]),
                 to_matlab_string(entry["property"]),
                 _matlab_variant_value(entry["value"]),
-            )
+            ))
+            + "}"
         )
-        + "}"
-        for entry in content
-    ]
     return "{" + ",".join(entries) + "}"
 
 
@@ -341,10 +343,19 @@ class SbioModel:
     ) -> str:
         """Build ``adddose`` plus assignments for each provided (non-None) field."""
 
-        if dose_type == "schedule" and any(v is not None for v in (start_time, interval, repeat_count)):
-            raise ValueError("start_time/interval/repeat_count are repeat-dose fields, not valid for dose_type='schedule'.")
+        if dose_type not in ("repeat", "schedule"):
+            raise ValueError(f"dose_type must be 'repeat' or 'schedule', got {dose_type!r}.")
+        if dose_type == "schedule" and any(
+                v is not None for v in (amount, rate, start_time, interval, repeat_count)):
+            raise ValueError(
+                "amount/rate/start_time/interval/repeat_count are repeat-dose fields; "
+                "a schedule dose uses amounts/rates.")
         if dose_type == "repeat" and any(v is not None for v in (times, amounts, rates)):
-            raise ValueError("times/amounts/rates are schedule-dose fields, not valid for dose_type='repeat'.")
+            raise ValueError(
+                "times/amounts/rates are schedule-dose fields, not valid for dose_type='repeat'.")
+        vectors = [v for v in (times, amounts, rates) if v is not None]
+        if vectors and any(len(v) != len(vectors[0]) for v in vectors):
+            raise ValueError("times/amounts/rates must all have the same length.")
 
         parts = [
             f"sbio_d = adddose({self.var},{to_matlab_string(name)},{to_matlab_string(dose_type)});",
@@ -453,6 +464,13 @@ class SbioModel:
         return "[" + ",".join(
             f"{getter}({self.var},{to_matlab_string(name)})" for name in names) + "]"
 
+    def _require_named(self, kind: str, existing: list[str], requested: list[str]) -> None:
+        """Raise ``ElementNotFoundError`` if any requested name is not in ``existing``."""
+
+        missing = [name for name in requested if name not in existing]
+        if missing:
+            raise ElementNotFoundError(f"No {kind}(s) {missing} in model {self.name!r}.")
+
     def simulate(
         self,
         species: list[str] | None = None,
@@ -467,6 +485,10 @@ class SbioModel:
         (variants before doses), regardless of their Active flag.
         """
 
+        if doses:
+            self._require_named("dose", self.doses(), doses)
+        if variants:
+            self._require_named("variant", self.variants(), variants)
         if doses or variants:
             variant_array = self._name_array("getvariant", variants)
             dose_array = self._name_array("getdose", doses)

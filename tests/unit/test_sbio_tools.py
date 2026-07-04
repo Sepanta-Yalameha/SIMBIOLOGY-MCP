@@ -357,6 +357,11 @@ def test_dose_and_variant_tools_issue_expected_commands(svc: DummyService) -> No
     ]
 
 
+def test_modify_variant_rejects_empty_content(svc: DummyService) -> None:
+    with pytest.raises(ValueError):
+        sbio_tools.modify_variant("v1", [])
+
+
 def test_simulation_and_export_tools(svc: DummyService) -> None:
     assert sbio_tools.get_simulation_settings() == {"StopTime": 10.0, "SolverType": "ode15s"}
     assert sbio_tools.configure_simulation(stop_time=5.0, solver_type="ode45") == {

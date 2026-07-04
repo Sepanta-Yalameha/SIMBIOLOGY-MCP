@@ -191,6 +191,22 @@ def test_add_dose_cmd_rejects_mismatched_fields(model):
         model.add_dose_cmd("d1", "drug", "schedule", repeat_count=3)
     with pytest.raises(ValueError):
         model.add_dose_cmd("d1", "drug", "repeat", times=[0, 1])
+    # scalar amount/rate belong to a repeat dose, not a schedule dose
+    with pytest.raises(ValueError):
+        model.add_dose_cmd("d1", "drug", "schedule", amount=5, times=[0])
+    # schedule vectors must line up
+    with pytest.raises(ValueError):
+        model.add_dose_cmd("d1", "drug", "schedule", times=[0, 8], amounts=[5])
+
+
+def test_add_dose_cmd_rejects_unknown_dose_type(model):
+    with pytest.raises(ValueError):
+        model.add_dose_cmd("d1", "drug", "oral", amount=5)
+
+
+def test_add_variant_cmd_rejects_incomplete_entry(model):
+    with pytest.raises(ValueError):
+        model.add_variant_cmd("v", [{"type": "parameter", "name": "k1", "value": 0}])
 
 
 def test_variant_value_bool_renders_numeric(model):

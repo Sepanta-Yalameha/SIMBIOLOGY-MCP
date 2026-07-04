@@ -418,8 +418,11 @@ def modify_variant(
     """Modify a variant, replacing its entire content.
 
     ``content`` (list of ``{"type","name","property","value"}`` dicts) replaces
-    all existing entries.
+    all existing entries. Must be non-empty (use ``remove_variant`` to delete a
+    variant); an empty list would silently wipe all content.
     """
+    if not content:
+        raise ValueError("modify_variant replaces all content; provide at least one entry.")
     return _modify(model_name, "variant", name, content=content)
 
 
