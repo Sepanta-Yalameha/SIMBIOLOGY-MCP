@@ -1,46 +1,57 @@
-Using the SimBiology MCP tools, create a complete SimBiology project in the directory:
+Using the SimBiology MCP tools ONLY, build, simulate, and export the classic
+**repressilator** synthetic oscillator in *Escherichia coli*, in:
 
-projects/repressilator_basic/
+projects/repressilator/
 
-Build a classical repressilator synthetic gene circuit in Escherichia coli.
+Execute every step with MCP tools (do not describe actions; perform them). This is
+a determinism probe: the architecture below is fixed so every model builds the SAME
+circuit, and the only freedom is the parameter values, which you must obtain by
+research. Two correct attempts should produce the same trajectory.
 
-Requirements:
+## The system (build exactly this topology; do not substitute another design)
+A three-node ring oscillator (Elowitz & Leibler, *Nature*, 2000): three repressor
+genes wired in a cycle so each represses the next.
+- Repressors: **LacI, TetR, and lambda CI**.
+- Cyclic repression: LacI represses the TetR gene; TetR represses the CI gene;
+  CI represses the LacI gene.
+- For EACH of the three genes, model both **mRNA** and **protein**, with:
+  - repressed transcription using a Hill term:
+    transcription rate = alpha / (1 + (repressor_protein / K)^n) + leak
+  - first-order translation (mRNA -> protein)
+  - first-order degradation of mRNA and of protein
+- Represent regulation only through reaction rate expressions (this MCP has no
+  rules/events; do not use them).
 
-- Use SimBiology MCP tools for ALL model construction, editing, simulation, and export steps (do not describe actions—execute them via tools).
-- Query the iGEM Registry via available MCP integrations to select realistic promoters, repressors (e.g., LacI, TetR, CI), RBSs, terminators, GFP reporter, and degradation tags.
-- Query PubMed via MCP tools for experimentally measured kinetic parameters (transcription/translation rates, degradation constants, Hill coefficients, protein half-lives).
-- Every parameter must include a citation from PubMed or equivalent literature source.
-- Build the model programmatically using SimBiology MCP:
-  - compartments
-  - species
-  - parameters
-  - reactions
-  - rules
-  - events
-  - observables
-  - units consistency
-- Validate model structure using MCP tools and automatically fix any errors.
+## Research (you MUST use the MCP tools; do not invent unsourced numbers)
+- Use `pubmed_search` / `pubmed_article` to obtain the repressilator kinetic
+  parameters from the original Elowitz & Leibler 2000 paper (and, if needed, the
+  standard follow-up parameterizations): maximal transcription rate (alpha), leak,
+  translation rate, mRNA and protein half-lives, Hill coefficient n, and repression
+  threshold K. Convert half-lives to rate constants with k = ln(2) / half-life.
+- Use `igem_part` to select the registry BioBrick parts you are representing
+  (e.g. the pLac / pTet / pCI promoters, an RBS, and the LacI / TetR / CI coding
+  sequences). Record each part's registry ID.
+- In your final report, list every parameter, its value, and its PubMed citation or
+  iGEM part ID.
 
-Simulations (run via MCP tools):
+## Build (MCP tools)
+- One compartment representing the E. coli cell.
+- Six species: LacI_mRNA, TetR_mRNA, CI_mRNA, LacI, TetR, CI.
+- Initial conditions (use EXACTLY, to make the run reproducible): LacI = 5, every
+  other species = 0. (This small asymmetry starts the oscillation.)
 
-- Deterministic simulation (0–1000 min)
-- Stochastic simulation (50 replicates)
-- Parameter scan over promoter strengths
-- Sensitivity analysis
-- Dose-response analysis
-- Steady-state analysis
+## Simulate (deterministic)
+- Solver ode15s, stop time 1000 (minutes).
 
-Outputs (export using MCP tools into projects folder):
+## Outputs
+- Report the **oscillation period** and the **peak amplitude** of each repressor
+  protein.
+- `export_graph` of the three repressor proteins vs time (labeled, captioned) ->
+  projects/repressilator/repressilator.png
+- `export_csv` of that same time-course -> projects/repressilator/repressilator.csv
+- Save the project -> projects/repressilator/model.sbproj
 
-- Time-course plots
-- Oscillation period analysis
-- Sensitivity heatmaps
-- Network diagram of circuit
-- Summary tables of species/parameters
-- CSV datasets of simulation results
-- SBML export
-- MATLAB SimBiology project export
-- Full reproducible report with citations
-
-Ensure everything is saved under:
-projects/repressilator_basic/
+## Constraints
+- Deterministic ODE only (no stochastic solver).
+- Use only compartments, species, parameters, reactions, simulate, and export.
+- Every numeric parameter must trace to a PubMed citation or an iGEM part.

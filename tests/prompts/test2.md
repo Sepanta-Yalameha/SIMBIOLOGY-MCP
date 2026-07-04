@@ -1,55 +1,54 @@
-Using SimBiology MCP tools, create and analyze a full synthetic biology system in:
+Using the SimBiology MCP tools ONLY, build, simulate, and export a **genetic toggle
+switch coupled to Lux quorum sensing** in *Escherichia coli*, in:
 
-projects/toggle_quorum_sensing/
+projects/toggle_quorum/
 
-Construct an Escherichia coli genetic toggle switch coupled with Lux quorum sensing.
+Execute every step with MCP tools. This is a determinism probe: the architecture is
+fixed, and this prompt deliberately exercises the dosing and variant tools. Research
+the numeric parameters; do not invent them.
 
-MANDATORY TOOL USE:
+## The system (build exactly this topology)
+- **Toggle switch** (Gardner, Cantor & Collins, *Nature*, 2000): two genes, **LacI**
+  and **TetR**, whose promoters are each Hill-repressed by the other's protein
+  (LacI represses the TetR promoter; TetR represses the LacI promoter). Model mRNA
+  and protein for both.
+- **Reporter:** **GFP** transcribed from the TetR-repressed promoter, so GFP reports
+  one stable state of the switch.
+- **Quorum sensing:** **LuxI** synthesizes the signal **AHL**; **LuxR** binds AHL to
+  form a **LuxR-AHL complex** (association/dissociation) that activates a pLux
+  promoter driving extra **LacI**, coupling cell-density signaling into the toggle.
+- Use reaction rate expressions for all regulation (no rules/events).
 
-- All model building, querying, simulation, analysis, validation, and export must be done using SimBiology MCP tools.
-- Do NOT provide manual explanations of steps unless requested; execute via tools.
+## Research (use the MCP tools; cite everything in your report)
+- `pubmed_*`: Hill coefficients and repression thresholds for the LacI/TetR toggle;
+  LuxI AHL synthesis rate, LuxR-AHL association/dissociation constants, AHL
+  degradation; transcription/translation and degradation rates. Convert half-lives
+  to rate constants (k = ln(2)/half-life).
+- `igem_part`: choose registry parts for pLac, pTet, pLux, LuxR, LuxI, GFP, and the
+  RBSs. Record each part ID.
 
-External data requirements:
+## Dosing and scenarios (use the NEW MCP tools)
+- **Dose:** with `create_dose`, add an **IPTG bolus** that sequesters free LacI (a
+  repeat/bolus dose on the LacI species, or an inducer species that does so) large
+  enough to flip the switch. Research a reasonable IPTG amount.
+- **Variants:** with `create_variant`, define:
+  - `qs_on`: LuxI at its researched synthesis value (baseline).
+  - `qs_off`: LuxI knocked out (its synthesis/translation parameter set to 0).
 
-- Query iGEM Registry via MCP for genetic parts (promoters, repressors, LuxI/LuxR system, reporters, degradation tags).
-- Query PubMed via MCP for all kinetic parameters:
-  transcription/translation rates, binding affinities, Hill coefficients, degradation rates, diffusion constants, GFP maturation, growth rates.
-- Every parameter must include a traceable citation.
+## Simulate (deterministic ode15s, 1000 minutes) and compare
+1. Baseline toggle, no IPTG.
+2. Toggle + IPTG dose (expect the switch to flip).
+3. `qs_on` vs `qs_off` variants (quorum sensing's effect on the resting state).
 
-Model must include:
+## Outputs
+- Report steady-state GFP for each run and whether/when the switch flipped.
+- `export_graph` of run 2 (the IPTG flip), labeled and captioned ->
+  projects/toggle_quorum/iptg_flip.png
+- `export_csv` comparing the `qs_on` run -> projects/toggle_quorum/qs.csv
+- Save the project -> projects/toggle_quorum/model.sbproj
 
-- LacI/TetR mutual repression toggle switch
-- LuxI/LuxR quorum sensing system
-- AHL production, diffusion, and degradation (intra + extracellular compartments)
-- GFP reporter
-- Cell growth and dilution
-- Metabolic burden effects on expression
-- Protein degradation tags
-- Resource limitation effects
-
-Validate model using MCP tools and auto-repair inconsistencies.
-
-Run analyses via MCP:
-
-- Deterministic simulation
-- 100-run stochastic simulation ensemble
-- Dose-response analysis (IPTG and AHL)
-- Bistability analysis
-- Local + global sensitivity analysis
-- Parameter scans (promoter strength, degradation rates)
-- Monte Carlo uncertainty analysis
-- Steady-state analysis
-- Flux/reaction rate analysis
-- Comparison: quorum sensing ON vs OFF
-- Comparison: metabolic burden ON vs OFF
-
-Export everything into:
-projects/toggle_quorum_sensing/
-including:
-
-- SimBiology project file
-- SBML model
-- MATLAB code
-- CSV outputs
-- All figures (plots, heatmaps, phase diagrams, network graphs)
-- Full reproducible report with citations and modeling decisions
+## Constraints
+- Deterministic ODE only.
+- Use only compartments, species, parameters, reactions, doses, variants, simulate,
+  and export (no rules/events/observables/SBML).
+- Every numeric parameter must trace to a PubMed citation or an iGEM part.
