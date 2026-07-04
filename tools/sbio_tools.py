@@ -483,15 +483,19 @@ def export_graph(
 @register("export_csv")
 def export_csv(
     model_name: str | None = None,
+    path: str | None = None,
     species: list[str] | None = None,
     doses: list[str] | None = None,
     variants: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Export the simulation time-course as CSV text.
+    """Export the simulation time-course as CSV.
 
     Runs a simulation (honoring the same ``species``, ``doses``, and
-    ``variants`` as ``simulate_model``) and returns CSV with a ``time`` column
-    followed by one column per logged species.
+    ``variants`` as ``simulate_model``) and builds CSV with a ``time`` column
+    followed by one column per logged species. If ``path`` is given, the CSV is
+    written to that file (parent directories are created) and ``{path, rows,
+    columns}`` is returned, so a large time-course is not echoed inline. If
+    ``path`` is omitted, the CSV text is returned directly under ``csv``.
     """
 
     result = _model(model_name).simulate(species=species, doses=doses, variants=variants)
@@ -501,4 +505,10 @@ def export_csv(
     writer.writerow(["time", *names])
     for index, moment in enumerate(result["time"]):
         writer.writerow([moment, *(result["data"][name][index] for name in names)])
-    return {"csv": buffer.getvalue()}
+    text = buffer.getvalue()
+    if path is None:
+        return {"csv": text}
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, newline="")
+    return {"path": str(target), "rows": len(result["time"]), "columns": ["time", *names]}

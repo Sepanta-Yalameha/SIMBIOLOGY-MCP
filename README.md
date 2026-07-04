@@ -168,8 +168,9 @@ The server exposes its capabilities as MCP tools, grouped by area:
 - **Variants:** `create_variant`, `modify_variant`, `list_variants`,
   `remove_variant` (named parameter/species/compartment overrides, e.g. knockouts)
 - **Export:** `export_graph` (PNG plot of a simulation) and `export_csv`
-  (simulation time-course as CSV); both accept the same `doses`, `variants`, and
-  `species` arguments as `simulate_model`, so exports reflect that exact run
+  (simulation time-course as CSV — returned inline, or written to a file when a
+  `path` is given); both accept the same `doses`, `variants`, and `species`
+  arguments as `simulate_model`, so exports reflect that exact run
 - **Literature and parts:** `pubmed_search`, `pubmed_summary`, `pubmed_article`,
   `igem_part`
 

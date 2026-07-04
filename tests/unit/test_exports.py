@@ -87,3 +87,18 @@ def test_export_csv_passes_through_doses_variants_species(monkeypatch):
     sbio_tools.export_csv(species=["A"], doses=["d1"], variants=["v1"])
 
     assert model.simulate_calls == [{"species": ["A"], "doses": ["d1"], "variants": ["v1"]}]
+
+
+def test_export_csv_writes_file_when_path_given(tmp_path, monkeypatch):
+    _install(monkeypatch)
+    out = tmp_path / "nested" / "out.csv"   # parent dir must be created
+
+    result = sbio_tools.export_csv(path=str(out))
+
+    assert result == {"path": str(out), "rows": 3, "columns": ["time", "A", "B"]}
+    assert out.read_text().splitlines() == [
+        "time,A,B",
+        "0.0,10.0,0.0",
+        "1.0,6.0,4.0",
+        "2.0,3.0,7.0",
+    ]

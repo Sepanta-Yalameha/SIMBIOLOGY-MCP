@@ -139,3 +139,10 @@ def test_tools_export_graph_and_csv_end_to_end(tmp_path):
     dosed_peak = max(
         float(r.split(",")[1]) for r in sbio_tools.export_csv(doses=["bolus"])["csv"].splitlines()[1:])
     assert dosed_peak > base_peak
+
+    # export_csv with a path writes a real file next to the PNG (same cwd base)
+    csv_out = tmp_path / "data" / "run.csv"
+    result = sbio_tools.export_csv(path=str(csv_out), doses=["bolus"])
+    assert result["path"] == str(csv_out) and result["columns"] == ["time", "A", "B"]
+    assert csv_out.exists() and csv_out.read_text().splitlines()[0] == "time,A,B"
+    assert result["rows"] == len(csv_out.read_text().splitlines()) - 1
