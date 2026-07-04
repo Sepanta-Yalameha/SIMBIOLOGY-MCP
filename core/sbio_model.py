@@ -471,18 +471,20 @@ class SbioModel:
         if missing:
             raise ElementNotFoundError(f"No {kind}(s) {missing} in model {self.name!r}.")
 
-    def simulate(
+    def _simulate_to_workspace(
         self,
         species: list[str] | None = None,
         doses: list[str] | None = None,
         variants: list[str] | None = None,
-    ) -> dict[str, Any]:
-        """Run ``sbiosimulate`` on the active configset and return time-course data.
+    ) -> str:
+        """Run ``sbiosimulate`` on the active configset, leaving the result in a
+        MATLAB variable, and return that variable's name.
 
-        If ``species`` is given, only those quantities are returned (via
-        ``selectbyname``) instead of every logged state. Named ``doses`` and/or
-        ``variants`` are applied explicitly through the 4-arg ``sbiosimulate``
-        (variants before doses), regardless of their Active flag.
+        Named ``doses`` and/or ``variants`` are applied explicitly through the
+        4-arg ``sbiosimulate`` (variants before doses), regardless of their
+        Active flag. If ``species`` is given, the result is narrowed to those
+        quantities via ``selectbyname``. Shared by :meth:`simulate` and the
+        export helpers so every path simulates identically.
         """
 
         if doses:
@@ -497,13 +499,57 @@ class SbioModel:
                 f"{variant_array},{dose_array});")
         else:
             self._service.execute(f"sbio_sd = sbiosimulate({self.var});")
-        source = "sbio_sd"
         if species:
             names_cell = "{" + ",".join(to_matlab_string(s) for s in species) + "}"
             self._service.execute(f"sbio_sd_sel = selectbyname(sbio_sd,{names_cell});")
-            source = "sbio_sd_sel"
+            return "sbio_sd_sel"
+        return "sbio_sd"
+
+    def simulate(
+        self,
+        species: list[str] | None = None,
+        doses: list[str] | None = None,
+        variants: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Run ``sbiosimulate`` on the active configset and return time-course data.
+
+        If ``species`` is given, only those quantities are returned (via
+        ``selectbyname``) instead of every logged state. Named ``doses`` and/or
+        ``variants`` are applied explicitly through the 4-arg ``sbiosimulate``
+        (variants before doses), regardless of their Active flag.
+        """
+
+        source = self._simulate_to_workspace(species, doses, variants)
         time = self._service.execute(f"{source}.Time", nargout=1)
         data = self._service.execute(f"{source}.Data", nargout=1)
         names = self._service.execute(f"{source}.DataNames", nargout=1)
         units = self._service.execute(f"{source}.TimeUnits", nargout=1)
         return _format_simdata(time, data, names, units)
+
+    def export_plot(
+        self,
+        path: str,
+        resolution: int = 300,
+        species: list[str] | None = None,
+        doses: list[str] | None = None,
+        variants: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Simulate (honoring ``doses``/``variants``/``species``) and write the
+        SimBiology plot to ``path`` as a PNG at the given ``resolution`` (DPI).
+
+        Reuses :meth:`_simulate_to_workspace`, so the exported figure reflects
+        exactly the same run ``simulate`` would produce for the same arguments.
+        """
+
+        source = self._simulate_to_workspace(species, doses, variants)
+        self._service.execute(f"sbio_ax = sbioplot({source});")
+        self._service.execute("sbio_fig = get(sbio_ax,'Parent');")
+        try:
+            self._service.execute(
+                f"exportgraphics(sbio_fig,{to_matlab_string(str(path))},"
+                f"'Resolution',{int(resolution)});")
+        finally:
+            # Always close the figure sbioplot opened: a long-lived MCP session
+            # would otherwise leak a window per export and slow MATLAB down.
+            self._service.execute("close(sbio_fig);")
+        return {"path": str(path), "resolution": int(resolution)}

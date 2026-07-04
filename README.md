@@ -162,8 +162,14 @@ The server exposes its capabilities as MCP tools, grouped by area:
 - **Model elements:** `create_*`, `modify_*`, `remove_*`, and `list_*` for
   compartments, species, reactions, and parameters
 - **Simulation:** `get_simulation_settings`, `configure_simulation`,
-  `simulate_model`
-- **Export:** `export_graph` (PNG plot), `export_csv` (model inventory)
+  `simulate_model` (optionally applying named `doses`/`variants` for the run)
+- **Dosing:** `create_dose`, `modify_dose`, `list_doses`, `remove_dose`
+  (repeat and schedule doses; bolus or zero-order infusion)
+- **Variants:** `create_variant`, `modify_variant`, `list_variants`,
+  `remove_variant` (named parameter/species/compartment overrides, e.g. knockouts)
+- **Export:** `export_graph` (PNG plot of a simulation) and `export_csv`
+  (simulation time-course as CSV); both accept the same `doses`, `variants`, and
+  `species` arguments as `simulate_model`, so exports reflect that exact run
 - **Literature and parts:** `pubmed_search`, `pubmed_summary`, `pubmed_article`,
   `igem_part`
 

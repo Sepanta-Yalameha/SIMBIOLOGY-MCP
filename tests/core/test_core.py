@@ -302,6 +302,73 @@ def test_simulate_with_two_variants(simulatable_project):
     assert both["data"]["A"][-1] < start_only["data"]["A"][-1]  # second (fast k1) variant also applied
 
 
+# --- export: plot reflects the run; CSV is real time-course (real engine) ---
+def _parse_csv(text):
+    lines = [line for line in text.splitlines() if line]
+    header = lines[0].split(",")
+    rows = [[float(cell) for cell in line.split(",")] for line in lines[1:]]
+    return header, rows
+
+
+def test_export_plot_writes_png(simulatable_project, tmp_path):
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    out = tmp_path / "plot.png"
+    result = m.export_plot(str(out))
+    assert result == {"path": str(out), "resolution": 300}
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_export_plot_with_dose_writes_png(simulatable_project, tmp_path):
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    svc.execute(m.add_dose_cmd(
+        "bolus", "A", dose_type="repeat", amount=100, start_time=5, interval=100, repeat_count=0))
+    out = tmp_path / "dosed.png"
+    m.export_plot(str(out), doses=["bolus"])   # must not crash and must honor the dose
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_export_csv_matches_simulate(simulatable_project):
+    # CSV export is the real time-course: same values simulate() returns.
+    from tools import sbio_tools
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    sim = m.simulate()
+    sbio_tools._service = svc
+    try:
+        csv_text = sbio_tools.export_csv()["csv"]
+    finally:
+        sbio_tools._service = None
+    header, rows = _parse_csv(csv_text)
+    assert header == ["time", "A", "B"]
+    assert len(rows) == len(sim["time"])
+    assert rows[0][0] == sim["time"][0]
+    assert rows[0][1] == sim["data"]["A"][0]        # A starts at 10
+    assert rows[-1][1] < rows[0][1]                 # A decays over the run
+
+
+def test_export_csv_honors_dose(simulatable_project):
+    from tools import sbio_tools
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    svc.execute(m.add_dose_cmd(
+        "bolus", "A", dose_type="repeat", amount=100, start_time=5, interval=100, repeat_count=0))
+    sbio_tools._service = svc
+    try:
+        base = sbio_tools.export_csv()["csv"]
+        dosed = sbio_tools.export_csv(doses=["bolus"])["csv"]
+    finally:
+        sbio_tools._service = None
+    base_max = max(row[1] for row in _parse_csv(base)[1])
+    dosed_max = max(row[1] for row in _parse_csv(dosed)[1])
+    assert dosed_max > base_max                     # the dose shows up in the exported data
+
+
 # --- multiple models ---
 def test_get_model_ambiguous_raises(two_model_project):
     svc = SbioService()

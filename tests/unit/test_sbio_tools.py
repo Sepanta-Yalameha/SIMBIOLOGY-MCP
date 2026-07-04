@@ -87,6 +87,16 @@ class DummyModel:
         names = species or ["S1", "S2"]
         return {"time": [0.0, 1.0], "names": names, "data": {name: [1.0, 0.5] for name in names}}
 
+    def export_plot(
+        self,
+        path: str,
+        resolution: int = 300,
+        species: list[str] | None = None,
+        doses: list[str] | None = None,
+        variants: list[str] | None = None,
+    ) -> dict[str, object]:
+        return {"path": path, "resolution": resolution}
+
     def add_compartment_cmd(self, name: str) -> str:
         return f"add_compartment:{name}"
 
@@ -377,14 +387,13 @@ def test_simulation_and_export_tools(svc: DummyService) -> None:
         "path": "plot.png",
         "resolution": 600,
     }
+    # export_csv now returns the simulation time-course, not the model inventory.
     assert sbio_tools.export_csv() == {
-        "csv": "kind,name\r\nspecies,S1\r\nspecies,S2\r\nreaction,R1\r\ncompartment,cell\r\nparameter,k1\r\n",
+        "csv": "time,S1,S2\r\n0.0,1.0,1.0\r\n1.0,0.5,0.5\r\n",
     }
 
+    # export_graph/export_csv delegate to the model, so only configure_simulation
+    # touches the service in this dummy setup.
     assert svc.commands == [
         "set_configset:{'stop_time': 5.0, 'solver_type': 'ode45'}",
-        "sim_data = sbiosimulate(m);",
-        "axes_handle = sbioplot(sim_data);",
-        "fig_handle = get(axes_handle, 'Parent');",
-        "exportgraphics(fig_handle, 'plot.png', 'Resolution', 600);",
     ]
