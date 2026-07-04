@@ -157,7 +157,7 @@ def test_set_dose_cmd_rejects_unknown_field(model):
 
 
 def test_delete_dose_cmd(model):
-    assert model.delete_dose_cmd("d1") == "rmdose(m,'d1');"
+    assert model.delete_dose_cmd("d1") == "delete(getdose(m,'d1'));"
 
 
 # --- variant builders (getvariant/addvariant path, not sbioselect) ---

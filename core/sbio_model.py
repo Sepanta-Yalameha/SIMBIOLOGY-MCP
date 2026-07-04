@@ -157,7 +157,7 @@ _FIELD_ATTRS: dict[str, dict[str, str]] = {
     "parameter": {"name": "Name", "value": "Value", "units": "ValueUnits"},
 }
 
-# Dose field -> object attribute; doses use getdose/rmdose, not sbioselect Types.
+# Dose field -> object attribute; doses use getdose/getvariant, not sbioselect Types.
 _DOSE_FIELDS: dict[str, str] = {
     "target": "TargetName",
     "amount": "Amount",
@@ -387,7 +387,7 @@ class SbioModel:
         return " ".join(updates)
 
     def delete_dose_cmd(self, name: str) -> str:
-        return f"rmdose({self.var},{to_matlab_string(name)});"
+        return f"delete(getdose({self.var},{to_matlab_string(name)}));"
 
     def add_variant_cmd(self, name: str, content: list[dict[str, Any]]) -> str:
         """Build ``addvariant`` plus ``addcontent`` for the given content entries."""

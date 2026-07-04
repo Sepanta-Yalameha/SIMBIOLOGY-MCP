@@ -161,6 +161,72 @@ def test_get_variant_unknown_raises(sample_project):
         _loaded(sample_project).get_model().get_variant("nope")
 
 
+# --- dose/variant mutations, multi-entry, and schedule (real engine) ---
+def test_schedule_dose_create_and_read(sample_project):
+    svc = _loaded(sample_project)
+    m = svc.get_model()
+    svc.execute(m.add_dose_cmd(
+        "sched", "glucose", dose_type="schedule", times=[0, 5, 10], amounts=[10, 20, 30]))
+    assert "sched" in m.doses()
+    assert m.get_dose("sched")["Name"] == "sched"
+
+def test_add_multi_entry_variant_executes(sample_project):
+    svc = _loaded(sample_project)
+    m = svc.get_model()
+    svc.execute(m.add_variant_cmd("v2", [
+        {"type": "parameter", "name": "k1", "property": "Value", "value": 0.0},
+        {"type": "species", "name": "glucose", "property": "InitialAmount", "value": 5.0},
+    ]))
+    assert "v2" in m.variants()
+    assert m.get_variant("v2")["Name"] == "v2"
+
+def test_modify_dose_and_read(sample_project):
+    svc = _loaded(sample_project)
+    m = svc.get_model()
+    svc.execute(m.set_dose_cmd("d1", amount=250))
+    assert m.get_dose("d1")["Amount"] == 250.0
+
+def test_modify_variant_replaces_content(sample_project):
+    svc = _loaded(sample_project)
+    m = svc.get_model()
+    svc.execute(m.set_variant_cmd("v1", [
+        {"type": "parameter", "name": "k1", "property": "Value", "value": 9.0},
+    ]))
+    assert "v1" in m.variants()
+
+def test_remove_dose_and_variant(sample_project):
+    svc = _loaded(sample_project)
+    m = svc.get_model()
+    svc.execute(m.delete_dose_cmd("d1"))
+    assert "d1" not in m.doses()
+    svc.execute(m.delete_variant_cmd("v1"))
+    assert "v1" not in m.variants()
+
+def test_simulate_with_dose_applies_bump(simulatable_project):
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    svc.execute(m.add_dose_cmd(
+        "bolus", "A", dose_type="repeat", amount=100, start_time=5, interval=100, repeat_count=0))
+    base = m.simulate()
+    dosed = m.simulate(doses=["bolus"])
+    assert max(dosed["data"]["A"]) > max(base["data"]["A"])
+
+def test_simulate_with_variant_changes_rate(simulatable_project):
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    svc.execute(m.add_variant_cmd(
+        "fast", [{"type": "parameter", "name": "k1", "property": "Value", "value": 5.0}]))
+    base = m.simulate()
+    fast = m.simulate(variants=["fast"])
+    assert fast["data"]["A"][-1] < base["data"]["A"][-1]
+
+def test_simulate_unknown_dose_raises(simulatable_project):
+    with pytest.raises(ElementNotFoundError):
+        _loaded(simulatable_project).get_model().simulate(doses=["nope"])
+
+
 # --- multiple models ---
 def test_get_model_ambiguous_raises(two_model_project):
     svc = SbioService()

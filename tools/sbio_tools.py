@@ -364,7 +364,12 @@ def modify_dose(
     rate_units: str | None = None,
     time_units: str | None = None,
 ) -> dict[str, Any]:
-    """Modify a dose in a model (scalar RepeatDose fields)."""
+    """Modify a repeat dose's scalar fields.
+
+    Only repeat-dose scalar fields are supported. To change a schedule dose (its
+    ``Time``/``Amount``/``Rate`` vectors), remove it and recreate it with
+    ``create_dose``.
+    """
     return _modify(
         model_name,
         "dose",
