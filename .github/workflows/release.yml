@@ -7,9 +7,14 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/simbiology-mcp
     permissions:
       contents: read
       id-token: write
+
     steps:
       - uses: actions/checkout@v4
 
