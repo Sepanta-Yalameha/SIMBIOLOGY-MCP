@@ -94,6 +94,44 @@ def _format_simdata(time: Any, data: Any, names: Any, units: Any) -> dict[str, A
     }
 
 
+def _matlab_column(values: Any) -> str:
+    """Format a sequence of numbers as a MATLAB numeric column-vector literal."""
+
+    return "[" + ";".join(to_matlab_number(value) for value in values) + "]"
+
+
+def _matlab_variant_value(value: Any) -> str:
+    """Format a variant content value (numeric via number, otherwise string).
+
+    ``bool`` is a subclass of ``int``, so ``True``/``False`` render as ``1.0``/
+    ``0.0`` rather than a quoted string SimBiology would reject for a numeric
+    property.
+    """
+
+    if isinstance(value, (int, float)):
+        return to_matlab_number(value)
+    return to_matlab_string(value)
+
+
+def _matlab_content(content: list[dict[str, Any]]) -> str:
+    """Render variant content dicts as a MATLAB cell array of 4-tuples."""
+
+    entries = [
+        "{"
+        + ",".join(
+            (
+                to_matlab_string(entry["type"]),
+                to_matlab_string(entry["name"]),
+                to_matlab_string(entry["property"]),
+                _matlab_variant_value(entry["value"]),
+            )
+        )
+        + "}"
+        for entry in content
+    ]
+    return "{" + ",".join(entries) + "}"
+
+
 _DETAIL: dict[str, str] = {
     "species": "struct('Name',sbio_e.Name,'Value',sbio_e.Value,'Units',sbio_e.InitialAmountUnits,'Compartment',sbio_e.Parent.Name)",
     "reaction": "struct('Name',sbio_e.Name,'Reaction',sbio_e.Reaction,'Reversible',sbio_e.Reversible)",
@@ -101,7 +139,14 @@ _DETAIL: dict[str, str] = {
     "parameter": "struct('Name',sbio_e.Name,'Value',sbio_e.Value,'Units',sbio_e.ValueUnits)",
 }
 
-_LIST_PROPS = {"species": "Species", "reaction": "Reactions", "compartment": "Compartments", "parameter": "Parameters"}
+_LIST_PROPS = {
+    "species": "Species",
+    "reaction": "Reactions",
+    "compartment": "Compartments",
+    "parameter": "Parameters",
+    "dose": "Doses",
+    "variant": "Variants",
+}
 
 _FIELD_ATTRS: dict[str, dict[str, str]] = {
     "species": {"name": "Name", "value": "Value", "units": "InitialAmountUnits"},
@@ -109,6 +154,20 @@ _FIELD_ATTRS: dict[str, dict[str, str]] = {
     "compartment": {"name": "Name", "capacity": "Capacity", "units": "CapacityUnits"},
     "parameter": {"name": "Name", "value": "Value", "units": "ValueUnits"},
 }
+
+# Dose field -> object attribute; doses use getdose/rmdose, not sbioselect Types.
+_DOSE_FIELDS: dict[str, str] = {
+    "target": "TargetName",
+    "amount": "Amount",
+    "rate": "Rate",
+    "interval": "Interval",
+    "start_time": "StartTime",
+    "repeat_count": "RepeatCount",
+    "amount_units": "AmountUnits",
+    "rate_units": "RateUnits",
+    "time_units": "TimeUnits",
+}
+_DOSE_STRING_FIELDS = {"target", "amount_units", "rate_units", "time_units"}
 
 # Active-configset reader; ``sbio_cs`` is the selected configset. Tolerances live
 # on SolverOptions and are read separately, because stochastic solvers
@@ -155,6 +214,12 @@ class SbioModel:
     def parameters(self) -> list[str]:
         return self._names("parameter")
 
+    def doses(self) -> list[str]:
+        return self._names("dose")
+
+    def variants(self) -> list[str]:
+        return self._names("variant")
+
     def _names(self, kind: str) -> list[str]:
         result = self._service.execute(f"{{{self.var}.{_LIST_PROPS[kind]}.Name}}", nargout=1)
         return [str(item) for item in (result or [])]
@@ -177,6 +242,39 @@ class SbioModel:
         if self._service.execute("isempty(sbio_e)", nargout=1):
             raise ElementNotFoundError(f"No {kind} named {name!r} in model {self.name!r}.")
         return self._service.execute(_DETAIL[kind], nargout=1)
+
+    def get_dose(self, name: str) -> dict[str, Any]:
+        """Return a dose's settings, reading only the type-appropriate fields."""
+
+        self._service.execute(f"sbio_e = getdose({self.var},{to_matlab_string(name)});")
+        if self._service.execute("isempty(sbio_e)", nargout=1):
+            raise ElementNotFoundError(f"No dose named {name!r} in model {self.name!r}.")
+        dose_type = "schedule" if "Schedule" in str(
+            self._service.execute("class(sbio_e)", nargout=1)) else "repeat"
+        detail: dict[str, Any] = {
+            "Name": self._service.execute("sbio_e.Name", nargout=1),
+            "Type": dose_type,
+            "TargetName": self._service.execute("sbio_e.TargetName", nargout=1),
+        }
+        fields = (("Time", "Amount", "Rate") if dose_type == "schedule"
+                  else ("Amount", "StartTime", "Interval", "RepeatCount", "Rate"))
+        for attr in fields:
+            detail[attr] = _finite_or_none(self._service.execute(f"sbio_e.{attr}", nargout=1))
+        for attr in ("AmountUnits", "RateUnits", "TimeUnits"):
+            detail[attr] = self._service.execute(f"sbio_e.{attr}", nargout=1)
+        return detail
+
+    def get_variant(self, name: str) -> dict[str, Any]:
+        """Return a variant's Active flag and content entries."""
+
+        self._service.execute(f"sbio_e = getvariant({self.var},{to_matlab_string(name)});")
+        if self._service.execute("isempty(sbio_e)", nargout=1):
+            raise ElementNotFoundError(f"No variant named {name!r} in model {self.name!r}.")
+        return {
+            "Name": self._service.execute("sbio_e.Name", nargout=1),
+            "Active": self._service.execute("sbio_e.Active", nargout=1),
+            "Content": self._service.execute("sbio_e.Content", nargout=1),
+        }
 
     # --- builders: return a MATLAB command string (do not execute) ---
     def add_species_cmd(self, compartment: str, name: str, amount: float) -> str:
@@ -222,6 +320,80 @@ class SbioModel:
 
     def set_parameter_cmd(self, name: str, **fields: Any) -> str:
         return self._set_cmd("parameter", name, fields)
+
+    # --- builders: doses and variants (getdose/getvariant path, not sbioselect) ---
+    def add_dose_cmd(
+        self,
+        name: str,
+        target: str,
+        dose_type: str = "repeat",
+        amount: float | None = None,
+        start_time: float | None = None,
+        interval: float | None = None,
+        repeat_count: float | None = None,
+        rate: float | None = None,
+        amount_units: str | None = None,
+        rate_units: str | None = None,
+        time_units: str | None = None,
+        times: list[float] | None = None,
+        amounts: list[float] | None = None,
+        rates: list[float] | None = None,
+    ) -> str:
+        """Build ``adddose`` plus assignments for each provided (non-None) field."""
+
+        if dose_type == "schedule" and any(v is not None for v in (start_time, interval, repeat_count)):
+            raise ValueError("start_time/interval/repeat_count are repeat-dose fields, not valid for dose_type='schedule'.")
+        if dose_type == "repeat" and any(v is not None for v in (times, amounts, rates)):
+            raise ValueError("times/amounts/rates are schedule-dose fields, not valid for dose_type='repeat'.")
+
+        parts = [
+            f"sbio_d = adddose({self.var},{to_matlab_string(name)},{to_matlab_string(dose_type)});",
+            f"sbio_d.TargetName = {to_matlab_string(target)};",
+        ]
+        for attr, value in (("Amount", amount), ("StartTime", start_time), ("Interval", interval),
+                            ("RepeatCount", repeat_count), ("Rate", rate)):
+            if value is not None:
+                parts.append(f"sbio_d.{attr} = {to_matlab_number(value)};")
+        for attr, values in (("Time", times), ("Amount", amounts), ("Rate", rates)):
+            if values is not None:
+                parts.append(f"sbio_d.{attr} = {_matlab_column(values)};")
+        for attr, value in (("AmountUnits", amount_units), ("RateUnits", rate_units),
+                            ("TimeUnits", time_units)):
+            if value is not None:
+                parts.append(f"sbio_d.{attr} = {to_matlab_string(value)};")
+        return " ".join(parts)
+
+    def set_dose_cmd(self, name: str, **fields: Any) -> str:
+        """Build assignments updating a dose selected by ``getdose`` (KeyError on unknown)."""
+
+        updates = [f"sbio_e = getdose({self.var},{to_matlab_string(name)});"]
+        for field, value in fields.items():
+            key = field.lower()
+            if key not in _DOSE_FIELDS:
+                raise KeyError(f"Unsupported dose field: {field}")
+            formatted = to_matlab_string(value) if key in _DOSE_STRING_FIELDS else to_matlab_number(value)
+            updates.append(f"sbio_e.{_DOSE_FIELDS[key]} = {formatted};")
+        return " ".join(updates)
+
+    def delete_dose_cmd(self, name: str) -> str:
+        return f"rmdose({self.var},{to_matlab_string(name)});"
+
+    def add_variant_cmd(self, name: str, content: list[dict[str, Any]]) -> str:
+        """Build ``addvariant`` plus ``addcontent`` for the given content entries."""
+
+        command = f"sbio_v = addvariant({self.var},{to_matlab_string(name)});"
+        if content:
+            command += f" addcontent(sbio_v,{_matlab_content(content)});"
+        return command
+
+    def set_variant_cmd(self, name: str, content: list[dict[str, Any]]) -> str:
+        """Build a command replacing a variant's entire Content."""
+
+        return (f"sbio_e = getvariant({self.var},{to_matlab_string(name)}); "
+                f"sbio_e.Content = {_matlab_content(content)};")
+
+    def delete_variant_cmd(self, name: str) -> str:
+        return f"delete(getvariant({self.var},{to_matlab_string(name)}));"
 
     def _select(self, kind: str, name: str) -> str:
         return f"sbioselect({self.var},'Type',{to_matlab_string(kind)},'Name',{to_matlab_string(name)})"
@@ -273,14 +445,36 @@ class SbioModel:
             updates.append(_CONFIGSET_SETTERS[key].format(value=formatted))
         return " ".join(updates)
 
-    def simulate(self, species: list[str] | None = None) -> dict[str, Any]:
+    def _name_array(self, getter: str, names: list[str] | None) -> str:
+        """Build a MATLAB array of ``getdose``/``getvariant`` selections, or ``[]``."""
+
+        if not names:
+            return "[]"
+        return "[" + ",".join(
+            f"{getter}({self.var},{to_matlab_string(name)})" for name in names) + "]"
+
+    def simulate(
+        self,
+        species: list[str] | None = None,
+        doses: list[str] | None = None,
+        variants: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Run ``sbiosimulate`` on the active configset and return time-course data.
 
         If ``species`` is given, only those quantities are returned (via
-        ``selectbyname``) instead of every logged state.
+        ``selectbyname``) instead of every logged state. Named ``doses`` and/or
+        ``variants`` are applied explicitly through the 4-arg ``sbiosimulate``
+        (variants before doses), regardless of their Active flag.
         """
 
-        self._service.execute(f"sbio_sd = sbiosimulate({self.var});")
+        if doses or variants:
+            variant_array = self._name_array("getvariant", variants)
+            dose_array = self._name_array("getdose", doses)
+            self._service.execute(
+                f"sbio_sd = sbiosimulate({self.var},getconfigset({self.var}),"
+                f"{variant_array},{dose_array});")
+        else:
+            self._service.execute(f"sbio_sd = sbiosimulate({self.var});")
         source = "sbio_sd"
         if species:
             names_cell = "{" + ",".join(to_matlab_string(s) for s in species) + "}"

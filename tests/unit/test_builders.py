@@ -125,6 +125,80 @@ def test_set_cmd_rejects_unknown_field(model):
         model.set_species_cmd("s", bogus=1)
 
 
+# --- dose builders (getdose/adddose path, not sbioselect) ---
+def test_add_dose_cmd_repeat(model):
+    assert model.add_dose_cmd(
+        "d1", "drug", "repeat", amount=100, start_time=0, interval=8,
+        repeat_count=5, rate=0, amount_units="milligram", time_units="hour") == (
+        "sbio_d = adddose(m,'d1','repeat'); sbio_d.TargetName = 'drug'; "
+        "sbio_d.Amount = 100.0; sbio_d.StartTime = 0.0; sbio_d.Interval = 8.0; "
+        "sbio_d.RepeatCount = 5.0; sbio_d.Rate = 0.0; "
+        "sbio_d.AmountUnits = 'milligram'; sbio_d.TimeUnits = 'hour';")
+
+
+def test_add_dose_cmd_schedule(model):
+    assert model.add_dose_cmd(
+        "d2", "drug", "schedule", times=[0, 8, 16], amounts=[100, 50, 50],
+        rates=[0, 0, 0], amount_units="milligram") == (
+        "sbio_d = adddose(m,'d2','schedule'); sbio_d.TargetName = 'drug'; "
+        "sbio_d.Time = [0.0;8.0;16.0]; sbio_d.Amount = [100.0;50.0;50.0]; "
+        "sbio_d.Rate = [0.0;0.0;0.0]; sbio_d.AmountUnits = 'milligram';")
+
+
+def test_set_dose_cmd(model):
+    assert model.set_dose_cmd("d1", amount=200, target="drug2", amount_units="gram") == (
+        "sbio_e = getdose(m,'d1'); sbio_e.Amount = 200.0; "
+        "sbio_e.TargetName = 'drug2'; sbio_e.AmountUnits = 'gram';")
+
+
+def test_set_dose_cmd_rejects_unknown_field(model):
+    with pytest.raises(KeyError):
+        model.set_dose_cmd("d1", bogus=1)
+
+
+def test_delete_dose_cmd(model):
+    assert model.delete_dose_cmd("d1") == "rmdose(m,'d1');"
+
+
+# --- variant builders (getvariant/addvariant path, not sbioselect) ---
+def test_add_variant_cmd_multi_entry(model):
+    assert model.add_variant_cmd("v1", [
+        {"type": "parameter", "name": "k1", "property": "Value", "value": 0},
+        {"type": "species", "name": "A", "property": "InitialAmount", "value": 5},
+    ]) == (
+        "sbio_v = addvariant(m,'v1'); "
+        "addcontent(sbio_v,{{'parameter','k1','Value',0.0},{'species','A','InitialAmount',5.0}});")
+
+
+def test_add_variant_cmd_no_content(model):
+    assert model.add_variant_cmd("v2", []) == "sbio_v = addvariant(m,'v2');"
+
+
+def test_set_variant_cmd(model):
+    assert model.set_variant_cmd("v1", [
+        {"type": "parameter", "name": "k1", "property": "Value", "value": 0.5},
+    ]) == (
+        "sbio_e = getvariant(m,'v1'); "
+        "sbio_e.Content = {{'parameter','k1','Value',0.5}};")
+
+
+def test_delete_variant_cmd(model):
+    assert model.delete_variant_cmd("v1") == "delete(getvariant(m,'v1'));"
+
+
+def test_add_dose_cmd_rejects_mismatched_fields(model):
+    with pytest.raises(ValueError):
+        model.add_dose_cmd("d1", "drug", "schedule", repeat_count=3)
+    with pytest.raises(ValueError):
+        model.add_dose_cmd("d1", "drug", "repeat", times=[0, 1])
+
+
+def test_variant_value_bool_renders_numeric(model):
+    assert model.add_variant_cmd("v", [
+        {"type": "parameter", "name": "on", "property": "Value", "value": True},
+    ]) == "sbio_v = addvariant(m,'v'); addcontent(sbio_v,{{'parameter','on','Value',1.0}});"
+
+
 # --- configset (simulation settings) builder ---
 def test_set_configset_cmd_formats_string_and_numeric_fields(model):
     assert model.set_configset_cmd(stop_time=5, solver_type="ode45") == (

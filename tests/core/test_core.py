@@ -133,6 +133,34 @@ def test_get_parameter_unknown_raises(sample_project):
         _loaded(sample_project).get_model().get_parameter("nope")
 
 
+# --- doses and variants (getdose/getvariant path) ---
+def test_doses_list(sample_project):
+    assert _loaded(sample_project).get_model().doses() == ["d1"]
+
+def test_variants_list(sample_project):
+    assert _loaded(sample_project).get_model().variants() == ["v1"]
+
+def test_get_dose_detail(sample_project):
+    d = _loaded(sample_project).get_model().get_dose("d1")
+    assert d["Name"] == "d1"
+    assert d["Type"] == "repeat"
+    assert d["TargetName"] == "glucose"
+    assert d["Amount"] == 100.0
+
+def test_get_dose_unknown_raises(sample_project):
+    with pytest.raises(ElementNotFoundError):
+        _loaded(sample_project).get_model().get_dose("nope")
+
+def test_get_variant_detail(sample_project):
+    v = _loaded(sample_project).get_model().get_variant("v1")
+    assert v["Name"] == "v1"
+    assert "Content" in v
+
+def test_get_variant_unknown_raises(sample_project):
+    with pytest.raises(ElementNotFoundError):
+        _loaded(sample_project).get_model().get_variant("nope")
+
+
 # --- multiple models ---
 def test_get_model_ambiguous_raises(two_model_project):
     svc = SbioService()
