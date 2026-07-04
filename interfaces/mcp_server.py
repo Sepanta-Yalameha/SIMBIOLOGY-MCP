@@ -27,6 +27,6 @@ def run() -> None:
             "MATLAB Engine for Python is not installed.\nRun `simbiology-mcp-setup` to install it from your local MATLAB installation.",
             file=sys.stderr,
         )
-    sys.exit(1)
+        sys.exit(1)
 
     build_server().run()
