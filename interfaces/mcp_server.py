@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from fastmcp import FastMCP
 
 from tools import TOOLS
@@ -18,5 +19,14 @@ def build_server() -> FastMCP:
 
 def run() -> None:
     """Console-script entry point: build the server and serve it."""
+
+    try:
+        import matlab.engine
+    except ImportError:
+        print(
+            "MATLAB Engine for Python is not installed.\nRun `simbiology-mcp-setup` to install it from your local MATLAB installation.",
+            file=sys.stderr,
+        )
+    sys.exit(1)
 
     build_server().run()
