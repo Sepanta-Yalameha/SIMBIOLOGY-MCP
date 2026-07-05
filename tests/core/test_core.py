@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from core.sbio_service import SbioService
 from core.sbio_model import SbioModel
@@ -339,11 +341,15 @@ def test_export_csv_matches_simulate(simulatable_project):
     svc.execute(m.set_configset_cmd(stop_time=10))
     sim = m.simulate()
     sbio_tools._service = svc
+    out = Path(simulatable_project).with_name("sim_export.csv")
     try:
-        csv_text = sbio_tools.export_csv()["csv"]
+        csv_meta = sbio_tools.export_csv(path=str(out))
+        csv_text = out.read_text()
     finally:
         sbio_tools._service = None
+        out.unlink(missing_ok=True)
     header, rows = _parse_csv(csv_text)
+    assert csv_meta["path"] == str(out)
     assert header == ["time", "A", "B"]
     assert len(rows) == len(sim["time"])
     assert rows[0][0] == sim["time"][0]
@@ -359,11 +365,17 @@ def test_export_csv_honors_dose(simulatable_project):
     svc.execute(m.add_dose_cmd(
         "bolus", "A", dose_type="repeat", amount=100, start_time=5, interval=100, repeat_count=0))
     sbio_tools._service = svc
+    base_out = Path(simulatable_project).with_name("base_export.csv")
+    dosed_out = Path(simulatable_project).with_name("dosed_export.csv")
     try:
-        base = sbio_tools.export_csv()["csv"]
-        dosed = sbio_tools.export_csv(doses=["bolus"])["csv"]
+        sbio_tools.export_csv(path=str(base_out))
+        sbio_tools.export_csv(path=str(dosed_out), doses=["bolus"])
+        base = base_out.read_text()
+        dosed = dosed_out.read_text()
     finally:
         sbio_tools._service = None
+        base_out.unlink(missing_ok=True)
+        dosed_out.unlink(missing_ok=True)
     base_max = max(row[1] for row in _parse_csv(base)[1])
     dosed_max = max(row[1] for row in _parse_csv(dosed)[1])
     assert dosed_max > base_max                     # the dose shows up in the exported data

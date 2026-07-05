@@ -71,6 +71,32 @@ def _require_units(units: str) -> str:
     return text
 
 
+def _limit_timecourse_rows(result: dict[str, Any], max_output_length: int | None) -> dict[str, Any]:
+    """Downsample returned rows for MCP output without changing the simulation."""
+
+    if max_output_length is None:
+        return result
+    if max_output_length < 1:
+        raise ValueError("max_output_length must be at least 1.")
+
+    total_rows = len(result["time"])
+    if total_rows <= max_output_length:
+        return result
+
+    if max_output_length == 1:
+        indices = [total_rows - 1]
+    else:
+        indices = sorted({round(i * (total_rows - 1) / (max_output_length - 1)) for i in range(max_output_length)})
+    return {
+        **result,
+        "time": [result["time"][index] for index in indices],
+        "data": {name: [values[index] for index in indices] for name, values in result["data"].items()},
+        "output_limited": True,
+        "returned_rows": len(indices),
+        "total_rows": total_rows,
+    }
+
+
 # projects
 @register("load_project")
 def load_project(path: str) -> dict[str, Any]:
@@ -293,7 +319,6 @@ def configure_simulation(
     absolute_tolerance: float | None = None,
     relative_tolerance: float | None = None,
     max_wall_clock: float | None = None,
-    max_number_of_logs: float | None = None,
 ) -> dict[str, Any]:
     """Configure simulation settings (stop time, solver, tolerances) for a model."""
     model = _model(model_name)
@@ -306,7 +331,6 @@ def configure_simulation(
             "absolute_tolerance": absolute_tolerance,
             "relative_tolerance": relative_tolerance,
             "max_wall_clock": max_wall_clock,
-            "max_number_of_logs": max_number_of_logs,
         }.items()
         if value is not None
     }
@@ -477,14 +501,18 @@ def simulate_model(
     species: list[str] | None = None,
     doses: list[str] | None = None,
     variants: list[str] | None = None,
+    max_output_length: int | None = None,
 ) -> dict[str, Any]:
-    """Run a SimBiology model simulation and return time-course results.
+    """Run a full SimBiology simulation and return time-course results.
 
     If ``species`` is given, only those quantities are returned instead of every
     logged state. Named ``doses`` and/or ``variants`` are applied by name for
     this run (via the 4-arg sbiosimulate), regardless of their Active flag.
+    ``max_output_length`` only limits rows returned to the MCP client; the
+    underlying simulation still runs in full, so exports still use the full run.
     """
-    return _model(model_name).simulate(species=species, doses=doses, variants=variants)
+    result = _model(model_name).simulate(species=species, doses=doses, variants=variants)
+    return _limit_timecourse_rows(result, max_output_length)
 
 
 @register("export_graph")
@@ -495,47 +523,70 @@ def export_graph(
     species: list[str] | None = None,
     doses: list[str] | None = None,
     variants: list[str] | None = None,
+    title: str | None = None,
+    x_label: str | None = None,
+    y_label: str | None = None,
+    legend_labels: list[str] | None = None,
 ) -> dict[str, Any]:
     """Simulate the model and export the plot as a PNG image.
 
     Honors the same ``species``, ``doses``, and ``variants`` as
     ``simulate_model`` (applied by name for this run), so the exported figure
-    reflects exactly that simulation rather than a bare re-run.
+    reflects exactly that simulation rather than a bare re-run. Use
+    ``title``/``x_label``/``y_label``/``legend_labels`` to avoid generic
+    default output when the user wants a presentation-ready figure.
     """
 
     target = Path(path or "simbiology_plot.png")
-    return _model(model_name).export_plot(str(target), resolution=resolution, species=species, doses=doses, variants=variants)
+    return _model(model_name).export_plot(
+        str(target),
+        resolution=resolution,
+        species=species,
+        doses=doses,
+        variants=variants,
+        title=title,
+        x_label=x_label,
+        y_label=y_label,
+        legend_labels=legend_labels,
+    )
 
 
 @register("export_csv")
 def export_csv(
+    path: str,
     model_name: str | None = None,
-    path: str | None = None,
     species: list[str] | None = None,
     doses: list[str] | None = None,
     variants: list[str] | None = None,
+    time_column: str = "time",
+    data_columns: list[str] | None = None,
+    delimiter: str = ",",
 ) -> dict[str, Any]:
     """Export the simulation time-course as CSV.
 
     Runs a simulation (honoring the same ``species``, ``doses``, and
     ``variants`` as ``simulate_model``) and builds CSV with a ``time`` column
-    followed by one column per logged species. If ``path`` is given, the CSV is
-    written to that file (parent directories are created) and ``{path, rows,
-    columns}`` is returned, so a large time-course is not echoed inline. If
-    ``path`` is omitted, the CSV text is returned directly under ``csv``.
+    followed by one column per logged species. Use ``time_column``,
+    ``data_columns``, and ``delimiter`` when the default raw header is not what
+    the user wants. The CSV is always written to ``path`` (parent directories
+    are created) and ``{path, rows, columns}`` is returned, so a large
+    time-course is never echoed inline to the agent.
     """
 
+    if len(delimiter) != 1:
+        raise ValueError("delimiter must be a single character.")
     result = _model(model_name).simulate(species=species, doses=doses, variants=variants)
     names = result["names"]
+    if data_columns is not None and len(data_columns) != len(names):
+        raise ValueError("data_columns must match the number of exported series.")
+    columns = [time_column, *(data_columns or names)]
     buffer = StringIO()
-    writer = csv.writer(buffer)
-    writer.writerow(["time", *names])
+    writer = csv.writer(buffer, delimiter=delimiter)
+    writer.writerow(columns)
     for index, moment in enumerate(result["time"]):
         writer.writerow([moment, *(result["data"][name][index] for name in names)])
     text = buffer.getvalue()
-    if path is None:
-        return {"csv": text}
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, newline="")
-    return {"path": str(target), "rows": len(result["time"]), "columns": ["time", *names]}
+    return {"path": str(target), "rows": len(result["time"]), "columns": columns}

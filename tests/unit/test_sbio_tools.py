@@ -90,6 +90,10 @@ class DummyModel:
         species: list[str] | None = None,
         doses: list[str] | None = None,
         variants: list[str] | None = None,
+        title: str | None = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        legend_labels: list[str] | None = None,
     ) -> dict[str, object]:
         return {"path": path, "resolution": resolution}
 
@@ -404,13 +408,14 @@ def test_simulation_and_export_tools(svc: DummyService) -> None:
         "names": ["S2"],
         "data": {"S2": [1.0, 0.5]},
     }
-    assert sbio_tools.export_graph(path="plot.png", resolution=600) == {
+    assert sbio_tools.export_graph(path="plot.png", resolution=600, title="Plot", y_label="Concentration") == {
         "path": "plot.png",
         "resolution": 600,
     }
-    # export_csv now returns the simulation time-course, not the model inventory.
-    assert sbio_tools.export_csv() == {
-        "csv": "time,S1,S2\r\n0.0,1.0,1.0\r\n1.0,0.5,0.5\r\n",
+    assert sbio_tools.export_csv(path="out.csv", time_column="minutes", data_columns=["Drug", "Metabolite"], delimiter=";") == {
+        "path": "out.csv",
+        "rows": 2,
+        "columns": ["minutes", "Drug", "Metabolite"],
     }
 
     # export_graph/export_csv delegate to the model, so only configure_simulation
@@ -418,3 +423,28 @@ def test_simulation_and_export_tools(svc: DummyService) -> None:
     assert svc.commands == [
         "set_configset:{'stop_time': 5.0, 'solver_type': 'ode45'}",
     ]
+
+
+def test_simulate_model_max_output_length_limits_only_returned_rows() -> None:
+    result = sbio_tools._limit_timecourse_rows(
+        {
+            "time": [0.0, 1.0, 2.0, 3.0, 4.0],
+            "names": ["S1"],
+            "data": {"S1": [10.0, 9.0, 8.0, 7.0, 6.0]},
+        },
+        max_output_length=3,
+    )
+
+    assert result == {
+        "time": [0.0, 2.0, 4.0],
+        "names": ["S1"],
+        "data": {"S1": [10.0, 8.0, 6.0]},
+        "output_limited": True,
+        "returned_rows": 3,
+        "total_rows": 5,
+    }
+
+
+def test_simulate_model_rejects_non_positive_max_output_length() -> None:
+    with pytest.raises(ValueError, match="max_output_length"):
+        sbio_tools._limit_timecourse_rows({"time": [0.0], "names": [], "data": {}}, max_output_length=0)
