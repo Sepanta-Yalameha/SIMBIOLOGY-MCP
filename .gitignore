@@ -4,6 +4,7 @@ projects/
 CLAUDE.md
 docs/
 .env
+out.csv
 # Python
 **/__pycache__/
 *.pyc
