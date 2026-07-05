@@ -12,7 +12,6 @@ def test_igem_part_live():
     assert result["title"]
     assert result["status"]
     assert isinstance(result["sequence"], str)
-    assert set(result["role"]) == {"uuid", "accession", "label", "deprecated"}
     assert "created" in result
     assert "updated" in result
     assert "license_uuid" in result

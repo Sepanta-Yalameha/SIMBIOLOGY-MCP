@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+import external.igem as igem
+from tools.external_tools import igem_part, igem_search, igem_search_best
+from tools.registry import TOOLS
+
+
+def test_igem_search_is_registered() -> None:
+    assert "igem_search" in TOOLS
+    assert TOOLS["igem_search"] is igem_search
+
+
+def test_igem_search_best_is_registered() -> None:
+    assert "igem_search_best" in TOOLS
+    assert TOOLS["igem_search_best"] is igem_search_best
+
+
+def test_igem_part_rejects_free_text() -> None:
+    with pytest.raises(ValueError, match="use igem_search"):
+        igem_part("lacI coding sequence")
+
+
+def test_igem_part_fetches_by_slug(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = object()
+    calls: list[Any] = []
+
+    def fake_get(fake_client: Any, ref: Any) -> dict[str, Any]:
+        calls.append((fake_client, ref))
+        assert fake_client is client
+        assert ref.slug == "bba-j23100"
+        return {
+            "name": "BBa_J23100",
+            "slug": "bba-j23100",
+            "uuid": "uuid-1",
+            "title": "Constitutive promoter",
+            "description": "demo",
+            "status": "published",
+            "source": "https://example.invalid",
+            "sequence": "ATGC",
+            "audit": {"created": "2026-01-01T00:00:00Z", "updated": "2026-01-02T00:00:00Z"},
+            "license": {"uuid": "license-1"},
+        }
+
+    monkeypatch.setattr(igem, "_client", lambda: client)
+    monkeypatch.setattr(igem.Part, "get", fake_get)
+
+    result = igem_part("BBa_J23100")
+
+    assert result["part"] == "BBa_J23100"
+    assert result["slug"] == "bba-j23100"
+    assert result["uuid"] == "uuid-1"
+    assert result["title"] == "Constitutive promoter"
+    assert result["license_uuid"] == "license-1"
+    assert result["created"] == "2026-01-01T00:00:00+00:00"
+    assert calls
+
+
+def test_igem_search_returns_summaries(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = object()
+
+    def fake_search(fake_client: Any, query: str, *, limit: int) -> list[dict[str, Any]]:
+        assert fake_client is client
+        assert query == "lacI"
+        assert limit == 2
+        return [
+            {
+                "name": "BBa_J23100",
+                "slug": "bba-j23100",
+                "uuid": "uuid-1",
+                "title": "Constitutive promoter",
+                "description": "demo",
+                "status": "published",
+                "audit": {"updated": "2026-01-02T00:00:00Z"},
+            }
+        ]
+
+    monkeypatch.setattr(igem, "_client", lambda: client)
+    monkeypatch.setattr(igem.Part, "search", fake_search)
+
+    result = igem_search("lacI", limit=2)
+
+    assert result == {
+        "query": "lacI",
+        "count": 1,
+        "results": [
+            {
+                "name": "BBa_J23100",
+                "slug": "bba-j23100",
+                "uuid": "uuid-1",
+                "title": "Constitutive promoter",
+                "description": "demo",
+                "status": "published",
+                "role": {"uuid": "", "accession": "", "label": "", "deprecated": False},
+                "updated": "2026-01-02T00:00:00+00:00",
+            }
+        ],
+    }
+
+
+def test_igem_search_best_returns_selected_and_alternatives(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = object()
+
+    def fake_search(fake_client: Any, query: str, *, limit: int) -> list[dict[str, Any]]:
+        assert fake_client is client
+        assert query == "lacI"
+        assert limit == 5
+        return [
+            {
+                "name": "BBa_J23100",
+                "slug": "bba-j23100",
+                "uuid": "uuid-1",
+                "title": "Constitutive promoter",
+                "description": "demo",
+                "status": "published",
+                "audit": {"updated": "2026-01-02T00:00:00Z"},
+            },
+            {
+                "name": "BBa_J23101",
+                "slug": "bba-j23101",
+                "uuid": "uuid-2",
+                "title": "Variant promoter",
+                "description": "alt",
+                "status": "published",
+                "audit": {"updated": "2026-01-03T00:00:00Z"},
+            },
+        ]
+
+    monkeypatch.setattr(igem, "_client", lambda: client)
+    monkeypatch.setattr(igem.Part, "search", fake_search)
+
+    result = igem_search_best("lacI")
+
+    assert result["query"] == "lacI"
+    assert result["selected"]["part"] == "BBa_J23100"
+    assert result["selected"]["uuid"] == "uuid-1"
+    assert result["selected"]["updated"] == "2026-01-02T00:00:00+00:00"
+    assert result["alternatives"] == [
+        {
+            "name": "BBa_J23101",
+            "slug": "bba-j23101",
+            "uuid": "uuid-2",
+            "title": "Variant promoter",
+            "description": "alt",
+            "status": "published",
+            "role": {"uuid": "", "accession": "", "label": "", "deprecated": False},
+            "updated": "2026-01-03T00:00:00+00:00",
+        }
+    ]
