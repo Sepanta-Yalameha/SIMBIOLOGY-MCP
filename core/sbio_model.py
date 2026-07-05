@@ -100,6 +100,12 @@ def _matlab_column(values: Any) -> str:
     return "[" + ";".join(to_matlab_number(value) for value in values) + "]"
 
 
+def _matlab_string_cell(values: list[str]) -> str:
+    """Format a list of strings as a MATLAB cell array of strings."""
+
+    return "{" + ",".join(to_matlab_string(value) for value in values) + "}"
+
+
 def _matlab_variant_value(value: Any) -> str:
     """Format a variant content value (numeric via number, otherwise string).
 
@@ -531,6 +537,10 @@ class SbioModel:
         species: list[str] | None = None,
         doses: list[str] | None = None,
         variants: list[str] | None = None,
+        title: str | None = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        legend_labels: list[str] | None = None,
     ) -> dict[str, Any]:
         """Simulate (honoring ``doses``/``variants``/``species``) and write the
         SimBiology plot to ``path`` as a PNG at the given ``resolution`` (DPI).
@@ -540,7 +550,19 @@ class SbioModel:
         """
 
         source = self._simulate_to_workspace(species, doses, variants)
+        names = self._service.execute(f"{source}.DataNames", nargout=1)
+        names = [names] if isinstance(names, str) else [str(name) for name in names]
+        if legend_labels is not None and len(legend_labels) != len(names):
+            raise ValueError("legend_labels must match the number of plotted series.")
         self._service.execute(f"sbio_ax = sbioplot({source});")
+        if title is not None:
+            self._service.execute(f"title(sbio_ax,{to_matlab_string(title)});")
+        if x_label is not None:
+            self._service.execute(f"xlabel(sbio_ax,{to_matlab_string(x_label)});")
+        if y_label is not None:
+            self._service.execute(f"ylabel(sbio_ax,{to_matlab_string(y_label)});")
+        if legend_labels is not None:
+            self._service.execute(f"legend(sbio_ax,{_matlab_string_cell(legend_labels)});")
         self._service.execute("sbio_fig = get(sbio_ax,'Parent');")
         try:
             self._service.execute(f"exportgraphics(sbio_fig,{to_matlab_string(str(path))}," f"'Resolution',{int(resolution)});")

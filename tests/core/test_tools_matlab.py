@@ -117,19 +117,36 @@ def test_tools_export_graph_and_csv_end_to_end(tmp_path):
 
     # export_graph honors the dose and writes a real PNG
     out = tmp_path / "plot.png"
-    assert sbio_tools.export_graph(path=str(out), doses=["bolus"]) == {"path": str(out), "resolution": 300}
+    assert sbio_tools.export_graph(
+        path=str(out),
+        doses=["bolus"],
+        title="A and B over time",
+        x_label="Time (second)",
+        y_label="Amount (mole)",
+        legend_labels=["Drug", "Metabolite"],
+    ) == {"path": str(out), "resolution": 300}
     assert out.exists() and out.stat().st_size > 0
 
     # export_csv returns real time-course; the dose raises A's peak
-    header = sbio_tools.export_csv()["csv"].splitlines()[0]
+    base_out = tmp_path / "base.csv"
+    dosed_out = tmp_path / "dosed.csv"
+    sbio_tools.export_csv(path=str(base_out))
+    sbio_tools.export_csv(path=str(dosed_out), doses=["bolus"])
+    header = base_out.read_text().splitlines()[0]
     assert header == "time,A,B"
-    base_peak = max(float(r.split(",")[1]) for r in sbio_tools.export_csv()["csv"].splitlines()[1:])
-    dosed_peak = max(float(r.split(",")[1]) for r in sbio_tools.export_csv(doses=["bolus"])["csv"].splitlines()[1:])
+    base_peak = max(float(r.split(",")[1]) for r in base_out.read_text().splitlines()[1:])
+    dosed_peak = max(float(r.split(",")[1]) for r in dosed_out.read_text().splitlines()[1:])
     assert dosed_peak > base_peak
 
     # export_csv with a path writes a real file next to the PNG (same cwd base)
     csv_out = tmp_path / "data" / "run.csv"
-    result = sbio_tools.export_csv(path=str(csv_out), doses=["bolus"])
-    assert result["path"] == str(csv_out) and result["columns"] == ["time", "A", "B"]
-    assert csv_out.exists() and csv_out.read_text().splitlines()[0] == "time,A,B"
+    result = sbio_tools.export_csv(
+        path=str(csv_out),
+        doses=["bolus"],
+        time_column="seconds",
+        data_columns=["Drug", "Metabolite"],
+        delimiter=";",
+    )
+    assert result["path"] == str(csv_out) and result["columns"] == ["seconds", "Drug", "Metabolite"]
+    assert csv_out.exists() and csv_out.read_text().splitlines()[0] == "seconds;Drug;Metabolite"
     assert result["rows"] == len(csv_out.read_text().splitlines()) - 1

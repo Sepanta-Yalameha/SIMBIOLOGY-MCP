@@ -90,6 +90,10 @@ class DummyModel:
         species: list[str] | None = None,
         doses: list[str] | None = None,
         variants: list[str] | None = None,
+        title: str | None = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        legend_labels: list[str] | None = None,
     ) -> dict[str, object]:
         return {"path": path, "resolution": resolution}
 
@@ -404,13 +408,14 @@ def test_simulation_and_export_tools(svc: DummyService) -> None:
         "names": ["S2"],
         "data": {"S2": [1.0, 0.5]},
     }
-    assert sbio_tools.export_graph(path="plot.png", resolution=600) == {
+    assert sbio_tools.export_graph(path="plot.png", resolution=600, title="Plot", y_label="Concentration") == {
         "path": "plot.png",
         "resolution": 600,
     }
-    # export_csv now returns the simulation time-course, not the model inventory.
-    assert sbio_tools.export_csv() == {
-        "csv": "time,S1,S2\r\n0.0,1.0,1.0\r\n1.0,0.5,0.5\r\n",
+    assert sbio_tools.export_csv(path="out.csv", time_column="minutes", data_columns=["Drug", "Metabolite"], delimiter=";") == {
+        "path": "out.csv",
+        "rows": 2,
+        "columns": ["minutes", "Drug", "Metabolite"],
     }
 
     # export_graph/export_csv delegate to the model, so only configure_simulation
