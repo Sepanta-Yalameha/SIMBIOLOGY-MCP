@@ -14,6 +14,7 @@ from engine.exceptions import (
 try:  # The MATLAB Engine for Python is optional at import time (CI, linting).
     from matlab.engine import MatlabExecutionError
 except ImportError:  # Real calls fail later in launch(); module import stays safe.
+
     class MatlabExecutionError(Exception):
         """Fallback when the MATLAB Engine for Python is not installed."""
 
@@ -80,16 +81,10 @@ class MatlabLayer:
                 "not found",
             )
             if any(marker in message for marker in missing_markers):
-                raise MatlabCommandNotFoundError(
-                    f"MATLAB command not found: {command}\nMATLAB error: {message}"
-                ) from exc
-            raise MatlabCommandFailedError(
-                f"MATLAB command failed: {command}\nMATLAB error: {message}"
-            ) from exc
+                raise MatlabCommandNotFoundError(f"MATLAB command not found: {command}\nMATLAB error: {message}") from exc
+            raise MatlabCommandFailedError(f"MATLAB command failed: {command}\nMATLAB error: {message}") from exc
         except Exception as exc:
-            raise MatlabCommandFailedError(
-                f"MATLAB command failed: {command}\nPython error: {exc}"
-            ) from exc
+            raise MatlabCommandFailedError(f"MATLAB command failed: {command}\nPython error: {exc}") from exc
 
     def ensure_alive(self) -> None:
         """Verify that the MATLAB engine is responsive.

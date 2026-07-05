@@ -16,8 +16,8 @@ from engine.matlab_layer import MatlabLayer
 
 def main() -> None:
     print("Launching MATLAB (first call is slow)...")
-    svc = SbioService()                    # starts the MATLAB engine
-    svc.create_project("pk_demo")          # fresh project with one model
+    svc = SbioService()  # starts the MATLAB engine
+    svc.create_project("pk_demo")  # fresh project with one model
     model = svc.get_model()
 
     # --- build the model via the builder/executor convention ---
@@ -41,8 +41,7 @@ def main() -> None:
     drug = result["data"]["Drug"]
     metab = result["data"]["Metabolite"]
 
-    print(f"\nsimulated {len(times)} time points over "
-          f"{times[0]}-{times[-1]} {result['time_units']}")
+    print(f"\nsimulated {len(times)} time points over " f"{times[0]}-{times[-1]} {result['time_units']}")
     print(f"{'t':>6} {'Drug':>10} {'Metabolite':>12}")
     for i in range(0, len(times), max(1, len(times) // 10)):
         print(f"{times[i]:6.2f} {drug[i]:10.4f} {metab[i]:12.4f}")

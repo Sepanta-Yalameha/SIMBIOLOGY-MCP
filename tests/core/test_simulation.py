@@ -16,9 +16,7 @@ def _loaded(project):
 # --- configset builder (pure string, no execution) ---
 def test_set_configset_cmd_format(simulatable_project):
     m = _loaded(simulatable_project).get_model()
-    assert m.set_configset_cmd(stop_time=5, solver_type="ode45") == (
-        f"sbio_cs = getconfigset({m.var}); "
-        "sbio_cs.StopTime = 5.0; sbio_cs.SolverType = 'ode45';")
+    assert m.set_configset_cmd(stop_time=5, solver_type="ode45") == (f"sbio_cs = getconfigset({m.var}); " "sbio_cs.StopTime = 5.0; sbio_cs.SolverType = 'ode45';")
 
 
 def test_set_configset_cmd_unknown_field_raises(simulatable_project):
@@ -43,8 +41,7 @@ def test_default_settings(simulatable_project):
 def test_configure_then_read(simulatable_project):
     svc = _loaded(simulatable_project)
     m = svc.get_model()
-    svc.execute(m.set_configset_cmd(
-        stop_time=5, solver_type="ode45", absolute_tolerance=1e-7))
+    svc.execute(m.set_configset_cmd(stop_time=5, solver_type="ode45", absolute_tolerance=1e-7))
     cfg = m.get_configset()
     assert cfg["StopTime"] == 5.0
     assert cfg["SolverType"] == "ode45"
@@ -76,8 +73,8 @@ def test_simulate_returns_timecourse(simulatable_project):
 
     a, b = result["data"]["A"], result["data"]["B"]
     assert a[0] == 10.0 and b[0] == 0.0
-    assert a[-1] < a[0]            # A decays
-    assert b[-1] > b[0]            # B accumulates
+    assert a[-1] < a[0]  # A decays
+    assert b[-1] > b[0]  # B accumulates
     # first-order decay conserves mass: A + B == 10 at every step
     for ai, bi in zip(a, b):
         assert math.isclose(ai + bi, 10.0, rel_tol=1e-3, abs_tol=1e-6)
