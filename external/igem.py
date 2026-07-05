@@ -2,19 +2,33 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+import re
 from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 
-from igem_registry_api import Client
+from igem_registry_api import Client, Part, Reference
 
-_IGEM_API_BASE = "https://api.registry.igem.org/v1"
-def _part_name_to_slug(part_name: str) -> str:
-    return part_name.lower().replace("_", "-")
+_PART_SLUG_RE = re.compile(r"^(?:bba-[a-z0-9]{1,10}|psb[a-z0-9]{3,5})$")
+
+
+@lru_cache(maxsize=1)
+def _client() -> Client:
+    client = Client()
+    client.connect()
+    return client
+
+
+def _dump(obj: Any) -> dict[str, Any]:
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump(mode="json")
+    if isinstance(obj, dict):
+        return obj
+    raise TypeError(f"Unsupported iGEM object type: {type(obj)!r}")
 
 
 def _parse_iso_datetime(value: str | None) -> str | None:
-    """Normalize a registry timestamp to UTC ISO-8601, or pass it through."""
-
     if not value:
         return None
     try:
@@ -32,28 +46,124 @@ def _role(role: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _fetch_part(slug: str) -> dict[str, Any]:
-    client = Client(base=_IGEM_API_BASE)
-    response = client.session.get(f"{client.base}/parts/slugs/{slug}", timeout=30.0)
-    response.raise_for_status()
-    return response.json()
+def _normalize_part_slug(part_name: str) -> str:
+    raw = part_name.strip().lower()
+    if not raw:
+        raise ValueError("part_name must not be empty")
+
+    if raw.startswith("bba_") or raw.startswith("bba-"):
+        slug = f"bba-{raw[4:].replace('_', '-')}"
+    elif raw.startswith("psb_") or raw.startswith("psb-"):
+        slug = f"psb{raw[4:].replace('_', '')}"
+    else:
+        slug = raw.replace("_", "-")
+
+    if not _PART_SLUG_RE.fullmatch(slug):
+        raise ValueError("part_name must be an exact iGEM part ID or slug like " "BBa_J23100, bba-j23100, pSB1C3, or psb1c3; " "use igem_search for free-text queries.")
+
+    return slug
+
+
+def _reference(part_name: str) -> Reference:
+    raw = part_name.strip()
+    if not raw:
+        raise ValueError("part_name must not be empty")
+
+    try:
+        return Reference(uuid=str(UUID(raw)))
+    except ValueError:
+        return Reference(slug=_normalize_part_slug(raw))
+
+
+def _normalize(part: Any) -> dict[str, Any]:
+    data = _dump(part)
+    audit = data.get("audit") or {}
+    license_value = data.get("license") or data.get("licenseUUID") or ""
+    license_uuid = str(license_value.get("uuid") or "") if isinstance(license_value, dict) else str(license_value or "")
+
+    return {
+        "part": str(data.get("name") or data.get("slug") or ""),
+        "name": str(data.get("name") or ""),
+        "slug": str(data.get("slug") or ""),
+        "uuid": str(data.get("uuid") or ""),
+        "title": str(data.get("title") or ""),
+        "description": str(data.get("description") or ""),
+        "status": str(data.get("status") or ""),
+        "source": str(data.get("source") or ""),
+        "sequence": str(data.get("sequence") or ""),
+        "role": _role(data.get("role") or {}),
+        "license": license_value,
+        "license_uuid": license_uuid,
+        "created": _parse_iso_datetime(audit.get("created")),
+        "updated": _parse_iso_datetime(audit.get("updated")),
+        "raw": data,
+    }
+
+
+def _summary(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": item["name"],
+        "slug": item["slug"],
+        "uuid": item["uuid"],
+        "title": item["title"],
+        "description": item["description"],
+        "status": item["status"],
+        "role": item["role"],
+        "updated": item["updated"],
+    }
 
 
 def part(part_name: str) -> dict[str, Any]:
-    """Fetch an iGEM part and return a normalized record."""
+    """Fetch an iGEM part by exact registry part ID, slug, or UUID."""
 
-    slug = _part_name_to_slug(part_name)
-    record = _fetch_part(slug)
+    reference = _reference(part_name)
+    return _normalize(Part.get(_client(), reference))
+
+
+def search(query: str, limit: int = 10) -> dict[str, Any]:
+    """Search iGEM parts by free text and return summary matches."""
+
+    query = query.strip()
+    if not query:
+        raise ValueError("query must not be empty")
+
+    limit = max(1, min(int(limit), 50))
+    results = [_normalize(record) for record in Part.search(_client(), query, limit=limit)]
+
     return {
-        "part": part_name,
-        "slug": str(record.get("slug") or slug),
-        "title": str(record.get("title") or ""),
-        "description": str(record.get("description") or ""),
-        "status": str(record.get("status") or ""),
-        "source": str(record.get("source") or ""),
-        "sequence": str(record.get("sequence") or ""),
-        "created": _parse_iso_datetime((record.get("audit") or {}).get("created")),
-        "updated": _parse_iso_datetime((record.get("audit") or {}).get("updated")),
-        "role": _role(record.get("role") or {}),
-        "license_uuid": str(record.get("licenseUUID") or ""),
+        "query": query,
+        "count": len(results),
+        "results": [_summary(item) for item in results],
+    }
+
+
+def search_best(query: str) -> dict[str, Any]:
+    """Search iGEM parts and return the best full matching part record."""
+
+    query = query.strip()
+    if not query:
+        raise ValueError("query must not be empty")
+
+    # Only try exact lookup if it looks like a UUID or valid part slug/ID.
+    try:
+        selected = part(query)
+        return {
+            "query": query,
+            "selected": selected,
+            "alternatives": [],
+        }
+    except Exception:
+        # Free-text queries belong to search, not exact part lookup.
+        pass
+
+    matches = list(Part.search(_client(), query, limit=5))
+    if not matches:
+        raise LookupError(f"No iGEM parts matched {query!r}.")
+
+    results = [_normalize(match) for match in matches]
+
+    return {
+        "query": query,
+        "selected": results[0],
+        "alternatives": [_summary(item) for item in results[1:]],
     }
