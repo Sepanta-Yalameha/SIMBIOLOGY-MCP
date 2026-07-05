@@ -171,6 +171,9 @@ The server exposes its capabilities as MCP tools, grouped by area:
   (simulation time-course as CSV written to a file at the required `path`);
   both accept the same `doses`, `variants`, and `species`
   arguments as `simulate_model`, so exports reflect that exact run
+- **Analysis:** `list_series`, `steady_state`, `series_min`, `series_max`
+  (read exported CSV files to inspect available series and basic endpoint/range
+  values without re-running MATLAB)
 - **Literature and parts:** `pubmed_search`, `pubmed_summary`, `pubmed_article`,
   `igem_part`, `igem_search`, `igem_search_best`
 

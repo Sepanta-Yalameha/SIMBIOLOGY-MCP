@@ -51,6 +51,15 @@ SBIO_TOOL_NAMES = {
     "modify_variant",
     "remove_variant",
     "list_variants",
+    "list_series",
+    "steady_state",
+    "series_min",
+    "series_max",
+}
+
+TOOL_MODULES = {
+    "tools.sbio_tools",
+    "tools.analysis_tools",
 }
 
 
@@ -220,7 +229,7 @@ def svc(monkeypatch: pytest.MonkeyPatch) -> DummyService:
 
 def test_sbio_tools_are_registered() -> None:
     assert SBIO_TOOL_NAMES <= set(TOOLS)
-    assert {name for name in SBIO_TOOL_NAMES if TOOLS[name].__module__ == "tools.sbio_tools"} == SBIO_TOOL_NAMES
+    assert {name for name in SBIO_TOOL_NAMES if TOOLS[name].__module__ in TOOL_MODULES} == SBIO_TOOL_NAMES
 
 
 def test_build_server_lists_sbio_tools() -> None:
