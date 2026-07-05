@@ -24,7 +24,7 @@ def test_set_configset_cmd_format(simulatable_project):
 def test_set_configset_cmd_unknown_field_raises(simulatable_project):
     m = _loaded(simulatable_project).get_model()
     try:
-        m.set_configset_cmd(nonsense=1)
+        m.set_configset_cmd(max_number_of_logs=1)
     except KeyError:
         return
     raise AssertionError("expected KeyError for unsupported setting")

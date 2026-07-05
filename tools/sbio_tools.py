@@ -71,6 +71,32 @@ def _require_units(units: str) -> str:
     return text
 
 
+def _limit_timecourse_rows(result: dict[str, Any], max_output_length: int | None) -> dict[str, Any]:
+    """Downsample returned rows for MCP output without changing the simulation."""
+
+    if max_output_length is None:
+        return result
+    if max_output_length < 1:
+        raise ValueError("max_output_length must be at least 1.")
+
+    total_rows = len(result["time"])
+    if total_rows <= max_output_length:
+        return result
+
+    if max_output_length == 1:
+        indices = [total_rows - 1]
+    else:
+        indices = sorted({round(i * (total_rows - 1) / (max_output_length - 1)) for i in range(max_output_length)})
+    return {
+        **result,
+        "time": [result["time"][index] for index in indices],
+        "data": {name: [values[index] for index in indices] for name, values in result["data"].items()},
+        "output_limited": True,
+        "returned_rows": len(indices),
+        "total_rows": total_rows,
+    }
+
+
 # projects
 @register("load_project")
 def load_project(path: str) -> dict[str, Any]:
@@ -293,7 +319,6 @@ def configure_simulation(
     absolute_tolerance: float | None = None,
     relative_tolerance: float | None = None,
     max_wall_clock: float | None = None,
-    max_number_of_logs: float | None = None,
 ) -> dict[str, Any]:
     """Configure simulation settings (stop time, solver, tolerances) for a model."""
     model = _model(model_name)
@@ -306,7 +331,6 @@ def configure_simulation(
             "absolute_tolerance": absolute_tolerance,
             "relative_tolerance": relative_tolerance,
             "max_wall_clock": max_wall_clock,
-            "max_number_of_logs": max_number_of_logs,
         }.items()
         if value is not None
     }
@@ -477,14 +501,18 @@ def simulate_model(
     species: list[str] | None = None,
     doses: list[str] | None = None,
     variants: list[str] | None = None,
+    max_output_length: int | None = None,
 ) -> dict[str, Any]:
-    """Run a SimBiology model simulation and return time-course results.
+    """Run a full SimBiology simulation and return time-course results.
 
     If ``species`` is given, only those quantities are returned instead of every
     logged state. Named ``doses`` and/or ``variants`` are applied by name for
     this run (via the 4-arg sbiosimulate), regardless of their Active flag.
+    ``max_output_length`` only limits rows returned to the MCP client; the
+    underlying simulation still runs in full, so exports still use the full run.
     """
-    return _model(model_name).simulate(species=species, doses=doses, variants=variants)
+    result = _model(model_name).simulate(species=species, doses=doses, variants=variants)
+    return _limit_timecourse_rows(result, max_output_length)
 
 
 @register("export_graph")

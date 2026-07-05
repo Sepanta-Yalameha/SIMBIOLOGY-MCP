@@ -423,3 +423,28 @@ def test_simulation_and_export_tools(svc: DummyService) -> None:
     assert svc.commands == [
         "set_configset:{'stop_time': 5.0, 'solver_type': 'ode45'}",
     ]
+
+
+def test_simulate_model_max_output_length_limits_only_returned_rows() -> None:
+    result = sbio_tools._limit_timecourse_rows(
+        {
+            "time": [0.0, 1.0, 2.0, 3.0, 4.0],
+            "names": ["S1"],
+            "data": {"S1": [10.0, 9.0, 8.0, 7.0, 6.0]},
+        },
+        max_output_length=3,
+    )
+
+    assert result == {
+        "time": [0.0, 2.0, 4.0],
+        "names": ["S1"],
+        "data": {"S1": [10.0, 8.0, 6.0]},
+        "output_limited": True,
+        "returned_rows": 3,
+        "total_rows": 5,
+    }
+
+
+def test_simulate_model_rejects_non_positive_max_output_length() -> None:
+    with pytest.raises(ValueError, match="max_output_length"):
+        sbio_tools._limit_timecourse_rows({"time": [0.0], "names": [], "data": {}}, max_output_length=0)

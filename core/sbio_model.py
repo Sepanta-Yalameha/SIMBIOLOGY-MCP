@@ -198,7 +198,6 @@ _CONFIGSET_SETTERS: dict[str, str] = {
     "absolute_tolerance": "sbio_cs.SolverOptions.AbsoluteTolerance = {value};",
     "relative_tolerance": "sbio_cs.SolverOptions.RelativeTolerance = {value};",
     "max_wall_clock": "sbio_cs.MaximumWallClock = {value};",
-    "max_number_of_logs": "sbio_cs.MaximumNumberOfLogs = {value};",
 }
 _CONFIGSET_STRING_FIELDS = {"solver_type", "time_units"}
 
