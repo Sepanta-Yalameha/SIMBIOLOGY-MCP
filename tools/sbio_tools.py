@@ -62,6 +62,15 @@ def _remove(model_name: str | None, kind: str, name: str) -> dict[str, Any]:
     return {"removed": name}
 
 
+def _require_units(units: str) -> str:
+    """Reject blank unit strings on create paths."""
+
+    text = units.strip()
+    if not text:
+        raise ValueError("units is required and cannot be blank.")
+    return text
+
+
 # projects
 @register("load_project")
 def load_project(path: str) -> dict[str, Any]:
@@ -137,12 +146,16 @@ def list_parameters(model_name: str | None = None) -> list[str]:
 
 # compartments
 @register("create_compartment")
-def create_compartment(name: str, model_name: str | None = None, capacity: float = 1.0) -> dict[str, Any]:
-    """Create a compartment in a model."""
-    _add(model_name, lambda m: m.add_compartment_cmd(name), name=name, capacity=capacity)
-    if capacity != 1.0:
-        _run(_model(model_name).set_compartment_cmd(name, capacity=capacity))
-    return {"name": name, "capacity": capacity}
+def create_compartment(name: str, units: str, model_name: str | None = None, capacity: float = 1.0) -> dict[str, Any]:
+    """Create a compartment in a model with required units."""
+    units = _require_units(units)
+    return _add(
+        model_name,
+        lambda m: m.add_compartment_cmd(name, capacity=capacity, units=units),
+        name=name,
+        capacity=capacity,
+        units=units,
+    )
 
 
 @register("modify_compartment")
@@ -159,9 +172,17 @@ def remove_compartment(name: str, model_name: str | None = None) -> dict[str, An
 
 # species
 @register("create_species")
-def create_species(name: str, compartment: str, value: float = 0.0, model_name: str | None = None) -> dict[str, Any]:
-    """Create a species in a model."""
-    return _add(model_name, lambda m: m.add_species_cmd(compartment, name, value), name=name, compartment=compartment, value=value)
+def create_species(name: str, compartment: str, units: str, value: float = 0.0, model_name: str | None = None) -> dict[str, Any]:
+    """Create a species in a model with required units."""
+    units = _require_units(units)
+    return _add(
+        model_name,
+        lambda m: m.add_species_cmd(compartment, name, value, units=units),
+        name=name,
+        compartment=compartment,
+        value=value,
+        units=units,
+    )
 
 
 @register("modify_species")
@@ -232,9 +253,16 @@ def remove_reaction(name: str, model_name: str | None = None) -> dict[str, Any]:
 
 # parameters
 @register("create_parameter")
-def create_parameter(name: str, value: float, model_name: str | None = None) -> dict[str, Any]:
-    """Create a parameter in a model."""
-    return _add(model_name, lambda m: m.add_parameter_cmd(name, value), name=name, value=value)
+def create_parameter(name: str, value: float, units: str, model_name: str | None = None) -> dict[str, Any]:
+    """Create a parameter in a model with required units."""
+    units = _require_units(units)
+    return _add(
+        model_name,
+        lambda m: m.add_parameter_cmd(name, value, units=units),
+        name=name,
+        value=value,
+        units=units,
+    )
 
 
 @register("modify_parameter")
@@ -476,8 +504,7 @@ def export_graph(
     """
 
     target = Path(path or "simbiology_plot.png")
-    return _model(model_name).export_plot(
-        str(target), resolution=resolution, species=species, doses=doses, variants=variants)
+    return _model(model_name).export_plot(str(target), resolution=resolution, species=species, doses=doses, variants=variants)
 
 
 @register("export_csv")

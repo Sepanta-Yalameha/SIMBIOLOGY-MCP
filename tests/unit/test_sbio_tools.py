@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import sys
-import types
 
 import pytest
-
-sys.modules.setdefault("igem_registry_api", types.SimpleNamespace(Client=object))
 
 from tools import sbio_tools
 from tools.registry import TOOLS
@@ -97,8 +93,8 @@ class DummyModel:
     ) -> dict[str, object]:
         return {"path": path, "resolution": resolution}
 
-    def add_compartment_cmd(self, name: str) -> str:
-        return f"add_compartment:{name}"
+    def add_compartment_cmd(self, name: str, capacity: float = 1.0, units: str | None = None) -> str:
+        return f"add_compartment:{name}:{capacity}:{units}"
 
     def set_compartment_cmd(self, name: str, **fields: object) -> str:
         return f"set_compartment:{name}:{fields!r}"
@@ -106,8 +102,8 @@ class DummyModel:
     def delete_compartment_cmd(self, name: str) -> str:
         return f"delete_compartment:{name}"
 
-    def add_species_cmd(self, compartment: str, name: str, value: float) -> str:
-        return f"add_species:{compartment}:{name}:{value}"
+    def add_species_cmd(self, compartment: str, name: str, value: float, units: str | None = None) -> str:
+        return f"add_species:{compartment}:{name}:{value}:{units}"
 
     def set_species_cmd(self, name: str, **fields: object) -> str:
         return f"set_species:{name}:{fields!r}"
@@ -124,8 +120,8 @@ class DummyModel:
     def delete_reaction_cmd(self, name: str) -> str:
         return f"delete_reaction:{name}"
 
-    def add_parameter_cmd(self, name: str, value: float) -> str:
-        return f"add_parameter:{name}:{value}"
+    def add_parameter_cmd(self, name: str, value: float, units: str | None = None) -> str:
+        return f"add_parameter:{name}:{value}:{units}"
 
     def set_parameter_cmd(self, name: str, **fields: object) -> str:
         return f"set_parameter:{name}:{fields!r}"
@@ -255,7 +251,11 @@ def test_read_tools(svc: DummyService) -> None:
 
 
 def test_structure_tools_issue_expected_commands(svc: DummyService) -> None:
-    assert sbio_tools.create_compartment("nucleus", capacity=2.0) == {"name": "nucleus", "capacity": 2.0}
+    assert sbio_tools.create_compartment("nucleus", "liter", capacity=2.0) == {
+        "name": "nucleus",
+        "capacity": 2.0,
+        "units": "liter",
+    }
     assert sbio_tools.modify_compartment("nucleus", capacity=3.0, units="liter") == {
         "name": "nucleus",
         "capacity": 3.0,
@@ -263,10 +263,11 @@ def test_structure_tools_issue_expected_commands(svc: DummyService) -> None:
     }
     assert sbio_tools.remove_compartment("nucleus") == {"removed": "nucleus"}
 
-    assert sbio_tools.create_species("ATP", "cell", value=5.0) == {
+    assert sbio_tools.create_species("ATP", "cell", "mole", value=5.0) == {
         "name": "ATP",
         "compartment": "cell",
         "value": 5.0,
+        "units": "mole",
     }
     assert sbio_tools.modify_species("ATP", value=6.0, units="molarity") == {
         "name": "ATP",
@@ -290,7 +291,11 @@ def test_structure_tools_issue_expected_commands(svc: DummyService) -> None:
     }
     assert sbio_tools.remove_reaction("rx1") == {"removed": "rx1"}
 
-    assert sbio_tools.create_parameter("k1", 1.5) == {"name": "k1", "value": 1.5}
+    assert sbio_tools.create_parameter("k1", 1.5, "1/second") == {
+        "name": "k1",
+        "value": 1.5,
+        "units": "1/second",
+    }
     assert sbio_tools.modify_parameter("k1", value=2.0, units="1/second") == {
         "name": "k1",
         "value": 2.0,
@@ -299,20 +304,28 @@ def test_structure_tools_issue_expected_commands(svc: DummyService) -> None:
     assert sbio_tools.remove_parameter("k1") == {"removed": "k1"}
 
     assert svc.commands == [
-        "add_compartment:nucleus",
-        "set_compartment:nucleus:{'capacity': 2.0}",
+        "add_compartment:nucleus:2.0:liter",
         "set_compartment:nucleus:{'capacity': 3.0, 'units': 'liter'}",
         "delete_compartment:nucleus",
-        "add_species:cell:ATP:5.0",
+        "add_species:cell:ATP:5.0:mole",
         "set_species:ATP:{'value': 6.0, 'units': 'molarity'}",
         "delete_species:ATP",
         "add_reaction:rx1:A <-> B; k*A",
         "set_reaction:rx1:{'reaction': 'B -> C', 'reversible': False, 'rate': 'k2*B'}",
         "delete_reaction:rx1",
-        "add_parameter:k1:1.5",
+        "add_parameter:k1:1.5:1/second",
         "set_parameter:k1:{'value': 2.0, 'units': '1/second'}",
         "delete_parameter:k1",
     ]
+
+
+def test_create_tools_require_non_blank_units() -> None:
+    with pytest.raises(ValueError, match="units is required"):
+        sbio_tools.create_compartment("nucleus", "   ")
+    with pytest.raises(ValueError, match="units is required"):
+        sbio_tools.create_species("ATP", "cell", "")
+    with pytest.raises(ValueError, match="units is required"):
+        sbio_tools.create_parameter("k1", 1.5, "\t")
 
 
 def test_modify_reaction_partial_edit_keeps_stoichiometry(svc: DummyService) -> None:
@@ -328,27 +341,35 @@ def test_modify_reaction_partial_edit_keeps_stoichiometry(svc: DummyService) -> 
 
 
 def test_dose_and_variant_tools_issue_expected_commands(svc: DummyService) -> None:
-    assert sbio_tools.create_dose(
-        "d1", "drug", dose_type="repeat", amount=100.0, interval=8.0,
-        repeat_count=5, amount_units="milligram") == {
-        "name": "d1", "target": "drug", "dose_type": "repeat", "amount": 100.0,
-        "start_time": None, "interval": 8.0, "repeat_count": 5, "rate": None,
-        "amount_units": "milligram", "rate_units": None, "time_units": None,
-        "times": None, "amounts": None, "rates": None,
+    assert sbio_tools.create_dose("d1", "drug", dose_type="repeat", amount=100.0, interval=8.0, repeat_count=5, amount_units="milligram") == {
+        "name": "d1",
+        "target": "drug",
+        "dose_type": "repeat",
+        "amount": 100.0,
+        "start_time": None,
+        "interval": 8.0,
+        "repeat_count": 5,
+        "rate": None,
+        "amount_units": "milligram",
+        "rate_units": None,
+        "time_units": None,
+        "times": None,
+        "amounts": None,
+        "rates": None,
     }
     assert sbio_tools.modify_dose("d1", amount=200.0, target="drug2") == {
-        "name": "d1", "target": "drug2", "amount": 200.0,
+        "name": "d1",
+        "target": "drug2",
+        "amount": 200.0,
     }
     assert sbio_tools.list_doses() == ["d1"]
     assert sbio_tools.remove_dose("d1") == {"removed": "d1"}
 
-    assert sbio_tools.create_variant(
-        "v1", [{"type": "parameter", "name": "k1", "property": "Value", "value": 0}]) == {
+    assert sbio_tools.create_variant("v1", [{"type": "parameter", "name": "k1", "property": "Value", "value": 0}]) == {
         "name": "v1",
         "content": [{"type": "parameter", "name": "k1", "property": "Value", "value": 0}],
     }
-    assert sbio_tools.modify_variant(
-        "v1", [{"type": "parameter", "name": "k1", "property": "Value", "value": 0.5}]) == {
+    assert sbio_tools.modify_variant("v1", [{"type": "parameter", "name": "k1", "property": "Value", "value": 0.5}]) == {
         "name": "v1",
         "content": [{"type": "parameter", "name": "k1", "property": "Value", "value": 0.5}],
     }
