@@ -123,12 +123,14 @@ def _matlab_content(content: list[dict[str, Any]]) -> str:
             raise ValueError(f"Variant content entry is missing keys {missing}: {entry!r}")
         entries.append(
             "{"
-            + ",".join((
-                to_matlab_string(entry["type"]),
-                to_matlab_string(entry["name"]),
-                to_matlab_string(entry["property"]),
-                _matlab_variant_value(entry["value"]),
-            ))
+            + ",".join(
+                (
+                    to_matlab_string(entry["type"]),
+                    to_matlab_string(entry["name"]),
+                    to_matlab_string(entry["property"]),
+                    _matlab_variant_value(entry["value"]),
+                )
+            )
             + "}"
         )
     return "{" + ",".join(entries) + "}"
@@ -251,15 +253,13 @@ class SbioModel:
         self._service.execute(f"sbio_e = getdose({self.var},{to_matlab_string(name)});")
         if self._service.execute("isempty(sbio_e)", nargout=1):
             raise ElementNotFoundError(f"No dose named {name!r} in model {self.name!r}.")
-        dose_type = "schedule" if "Schedule" in str(
-            self._service.execute("class(sbio_e)", nargout=1)) else "repeat"
+        dose_type = "schedule" if "Schedule" in str(self._service.execute("class(sbio_e)", nargout=1)) else "repeat"
         detail: dict[str, Any] = {
             "Name": self._service.execute("sbio_e.Name", nargout=1),
             "Type": dose_type,
             "TargetName": self._service.execute("sbio_e.TargetName", nargout=1),
         }
-        fields = (("Time", "Amount", "Rate") if dose_type == "schedule"
-                  else ("Amount", "StartTime", "Interval", "RepeatCount", "Rate"))
+        fields = ("Time", "Amount", "Rate") if dose_type == "schedule" else ("Amount", "StartTime", "Interval", "RepeatCount", "Rate")
         for attr in fields:
             detail[attr] = _finite_or_none(self._service.execute(f"sbio_e.{attr}", nargout=1))
         for attr in ("AmountUnits", "RateUnits", "TimeUnits"):
@@ -279,19 +279,29 @@ class SbioModel:
         }
 
     # --- builders: return a MATLAB command string (do not execute) ---
-    def add_species_cmd(self, compartment: str, name: str, amount: float) -> str:
-        return f"addspecies({self._select('compartment', compartment)},{to_matlab_string(name)},{to_matlab_number(amount)});"
+    def add_species_cmd(self, compartment: str, name: str, amount: float, units: str | None = None) -> str:
+        command = f"addspecies({self._select('compartment', compartment)},{to_matlab_string(name)},{to_matlab_number(amount)});"
+        return command if units is None else f"sbio_e = {command} sbio_e.InitialAmountUnits = {to_matlab_string(units)};"
 
     def add_reaction_cmd(self, name: str, equation: str) -> str:
         reaction, rate = _split_reaction_spec(equation)
         command = f"rxnObj = addreaction({self.var},{to_matlab_string(reaction)}); set(rxnObj,'Name',{to_matlab_string(name)});"
         return command if rate is None else f"{command} rxnObj.ReactionRate = {_format_reaction_rate(rate)};"
 
-    def add_compartment_cmd(self, name: str) -> str:
-        return f"addcompartment({self.var},{to_matlab_string(name)});"
+    def add_compartment_cmd(self, name: str, capacity: float = 1.0, units: str | None = None) -> str:
+        command = f"addcompartment({self.var},{to_matlab_string(name)});"
+        if capacity == 1.0 and units is None:
+            return command
+        updates: list[str] = []
+        if capacity != 1.0:
+            updates.append(f"sbio_e.Capacity = {to_matlab_number(capacity)};")
+        if units is not None:
+            updates.append(f"sbio_e.CapacityUnits = {to_matlab_string(units)};")
+        return f"sbio_e = {command} {' '.join(updates)}"
 
-    def add_parameter_cmd(self, name: str, value: float) -> str:
-        return f"addparameter({self.var},{to_matlab_string(name)},{to_matlab_number(value)});"
+    def add_parameter_cmd(self, name: str, value: float, units: str | None = None) -> str:
+        command = f"addparameter({self.var},{to_matlab_string(name)},{to_matlab_number(value)});"
+        return command if units is None else f"sbio_e = {command} sbio_e.ValueUnits = {to_matlab_string(units)};"
 
     def rename_model_cmd(self, new_name: str) -> str:
         return f"{self.var}.Name = {to_matlab_string(new_name)};"
@@ -345,14 +355,10 @@ class SbioModel:
 
         if dose_type not in ("repeat", "schedule"):
             raise ValueError(f"dose_type must be 'repeat' or 'schedule', got {dose_type!r}.")
-        if dose_type == "schedule" and any(
-                v is not None for v in (amount, rate, start_time, interval, repeat_count)):
-            raise ValueError(
-                "amount/rate/start_time/interval/repeat_count are repeat-dose fields; "
-                "a schedule dose uses amounts/rates.")
+        if dose_type == "schedule" and any(v is not None for v in (amount, rate, start_time, interval, repeat_count)):
+            raise ValueError("amount/rate/start_time/interval/repeat_count are repeat-dose fields; " "a schedule dose uses amounts/rates.")
         if dose_type == "repeat" and any(v is not None for v in (times, amounts, rates)):
-            raise ValueError(
-                "times/amounts/rates are schedule-dose fields, not valid for dose_type='repeat'.")
+            raise ValueError("times/amounts/rates are schedule-dose fields, not valid for dose_type='repeat'.")
         vectors = [v for v in (times, amounts, rates) if v is not None]
         if vectors and any(len(v) != len(vectors[0]) for v in vectors):
             raise ValueError("times/amounts/rates must all have the same length.")
@@ -361,15 +367,13 @@ class SbioModel:
             f"sbio_d = adddose({self.var},{to_matlab_string(name)},{to_matlab_string(dose_type)});",
             f"sbio_d.TargetName = {to_matlab_string(target)};",
         ]
-        for attr, value in (("Amount", amount), ("StartTime", start_time), ("Interval", interval),
-                            ("RepeatCount", repeat_count), ("Rate", rate)):
+        for attr, value in (("Amount", amount), ("StartTime", start_time), ("Interval", interval), ("RepeatCount", repeat_count), ("Rate", rate)):
             if value is not None:
                 parts.append(f"sbio_d.{attr} = {to_matlab_number(value)};")
         for attr, values in (("Time", times), ("Amount", amounts), ("Rate", rates)):
             if values is not None:
                 parts.append(f"sbio_d.{attr} = {_matlab_column(values)};")
-        for attr, value in (("AmountUnits", amount_units), ("RateUnits", rate_units),
-                            ("TimeUnits", time_units)):
+        for attr, value in (("AmountUnits", amount_units), ("RateUnits", rate_units), ("TimeUnits", time_units)):
             if value is not None:
                 parts.append(f"sbio_d.{attr} = {to_matlab_string(value)};")
         return " ".join(parts)
@@ -400,8 +404,7 @@ class SbioModel:
     def set_variant_cmd(self, name: str, content: list[dict[str, Any]]) -> str:
         """Build a command replacing a variant's entire Content."""
 
-        return (f"sbio_e = getvariant({self.var},{to_matlab_string(name)}); "
-                f"sbio_e.Content = {_matlab_content(content)};")
+        return f"sbio_e = getvariant({self.var},{to_matlab_string(name)}); " f"sbio_e.Content = {_matlab_content(content)};"
 
     def delete_variant_cmd(self, name: str) -> str:
         return f"delete(getvariant({self.var},{to_matlab_string(name)}));"
@@ -438,10 +441,8 @@ class SbioModel:
         raw = self._service.execute(_CONFIGSET_DETAIL, nargout=1)
         settings = {key: _finite_or_none(value) for key, value in raw.items()}
         if self._service.execute("isprop(sbio_cs.SolverOptions,'AbsoluteTolerance')", nargout=1):
-            settings["AbsoluteTolerance"] = self._service.execute(
-                "sbio_cs.SolverOptions.AbsoluteTolerance", nargout=1)
-            settings["RelativeTolerance"] = self._service.execute(
-                "sbio_cs.SolverOptions.RelativeTolerance", nargout=1)
+            settings["AbsoluteTolerance"] = self._service.execute("sbio_cs.SolverOptions.AbsoluteTolerance", nargout=1)
+            settings["RelativeTolerance"] = self._service.execute("sbio_cs.SolverOptions.RelativeTolerance", nargout=1)
         return settings
 
     def set_configset_cmd(self, **fields: Any) -> str:
@@ -461,8 +462,7 @@ class SbioModel:
 
         if not names:
             return "[]"
-        return "[" + ",".join(
-            f"{getter}({self.var},{to_matlab_string(name)})" for name in names) + "]"
+        return "[" + ",".join(f"{getter}({self.var},{to_matlab_string(name)})" for name in names) + "]"
 
     def _require_named(self, kind: str, existing: list[str], requested: list[str]) -> None:
         """Raise ``ElementNotFoundError`` if any requested name is not in ``existing``."""
@@ -494,9 +494,7 @@ class SbioModel:
         if doses or variants:
             variant_array = self._name_array("getvariant", variants)
             dose_array = self._name_array("getdose", doses)
-            self._service.execute(
-                f"sbio_sd = sbiosimulate({self.var},getconfigset({self.var}),"
-                f"{variant_array},{dose_array});")
+            self._service.execute(f"sbio_sd = sbiosimulate({self.var},getconfigset({self.var})," f"{variant_array},{dose_array});")
         else:
             self._service.execute(f"sbio_sd = sbiosimulate({self.var});")
         if species:
@@ -545,9 +543,7 @@ class SbioModel:
         self._service.execute(f"sbio_ax = sbioplot({source});")
         self._service.execute("sbio_fig = get(sbio_ax,'Parent');")
         try:
-            self._service.execute(
-                f"exportgraphics(sbio_fig,{to_matlab_string(str(path))},"
-                f"'Resolution',{int(resolution)});")
+            self._service.execute(f"exportgraphics(sbio_fig,{to_matlab_string(str(path))}," f"'Resolution',{int(resolution)});")
         finally:
             # Always close the figure sbioplot opened: a long-lived MCP session
             # would otherwise leak a window per export and slow MATLAB down.

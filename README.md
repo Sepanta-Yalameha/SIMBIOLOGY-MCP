@@ -172,7 +172,7 @@ The server exposes its capabilities as MCP tools, grouped by area:
   `path` is given); both accept the same `doses`, `variants`, and `species`
   arguments as `simulate_model`, so exports reflect that exact run
 - **Literature and parts:** `pubmed_search`, `pubmed_summary`, `pubmed_article`,
-  `igem_part`
+  `igem_part`, `igem_search`, `igem_search_best`
 
 ---
 

@@ -12,8 +12,30 @@ full suite runs locally where MATLAB and network access are available.
 from __future__ import annotations
 
 import importlib.util
+import sys
+import types
 
 import pytest
+
+
+class _StubReference:
+    def __init__(self, **kwargs: object) -> None:
+        self.__dict__.update(kwargs)
+
+
+class _StubPart:
+    get = staticmethod(lambda *args, **kwargs: None)
+    search = staticmethod(lambda *args, **kwargs: [])
+
+
+sys.modules.setdefault(
+    "igem_registry_api",
+    types.SimpleNamespace(
+        Client=object,
+        Part=_StubPart,
+        Reference=_StubReference,
+    ),
+)
 
 
 def matlab_available() -> bool:

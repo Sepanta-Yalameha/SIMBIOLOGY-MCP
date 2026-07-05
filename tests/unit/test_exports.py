@@ -9,11 +9,6 @@ covered by the ``matlab``-marked tests.
 
 from __future__ import annotations
 
-import sys
-import types
-
-sys.modules.setdefault("igem_registry_api", types.SimpleNamespace(Client=object))
-
 import tools.sbio_tools as sbio_tools
 
 
@@ -25,9 +20,7 @@ class DummyModel:
         self.simulate_calls: list[dict] = []
 
     def export_plot(self, path, resolution=300, species=None, doses=None, variants=None):
-        self.plot_calls.append(
-            {"path": path, "resolution": resolution, "species": species,
-             "doses": doses, "variants": variants})
+        self.plot_calls.append({"path": path, "resolution": resolution, "species": species, "doses": doses, "variants": variants})
         return {"path": path, "resolution": resolution}
 
     def simulate(self, species=None, doses=None, variants=None):
@@ -49,13 +42,10 @@ def _install(monkeypatch) -> DummyModel:
 def test_export_graph_delegates_to_export_plot(monkeypatch):
     model = _install(monkeypatch)
 
-    result = sbio_tools.export_graph(
-        path="out.png", resolution=600, species=["A"], doses=["d1"], variants=["v1"])
+    result = sbio_tools.export_graph(path="out.png", resolution=600, species=["A"], doses=["d1"], variants=["v1"])
 
     assert result == {"path": "out.png", "resolution": 600}
-    assert model.plot_calls == [
-        {"path": "out.png", "resolution": 600, "species": ["A"], "doses": ["d1"], "variants": ["v1"]}
-    ]
+    assert model.plot_calls == [{"path": "out.png", "resolution": 600, "species": ["A"], "doses": ["d1"], "variants": ["v1"]}]
 
 
 def test_export_graph_default_path(monkeypatch):
@@ -91,7 +81,7 @@ def test_export_csv_passes_through_doses_variants_species(monkeypatch):
 
 def test_export_csv_writes_file_when_path_given(tmp_path, monkeypatch):
     _install(monkeypatch)
-    out = tmp_path / "nested" / "out.csv"   # parent dir must be created
+    out = tmp_path / "nested" / "out.csv"  # parent dir must be created
 
     result = sbio_tools.export_csv(path=str(out))
 
