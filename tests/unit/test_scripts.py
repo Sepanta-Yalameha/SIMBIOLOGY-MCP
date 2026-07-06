@@ -12,7 +12,7 @@ def test_skill_path_prefers_repo_root() -> None:
 
 
 def test_write_skill_copies_skill_markdown(tmp_path: Path) -> None:
-    target = tmp_path / "skills" / "SKILLS.md"
+    target = tmp_path / "skills" / "SKILL.md"
 
     source, written = get_skill._write_skill(target)
 
@@ -23,10 +23,10 @@ def test_write_skill_copies_skill_markdown(tmp_path: Path) -> None:
 
 
 def test_skill_path_falls_back_to_packaged_copy(monkeypatch, tmp_path: Path) -> None:
-    packaged = tmp_path / "scripts" / "SKILLS.md"
+    packaged = tmp_path / "skills" / "simbiology_workflow" / "SKILL.md"
     packaged.parent.mkdir(parents=True)
     packaged.write_text("packaged skill", encoding="utf-8")
-    missing_repo = tmp_path / "missing" / "SKILLS.md"
+    missing_repo = tmp_path / "missing" / "SKILL.md"
 
     monkeypatch.setattr(get_skill, "_repo_skill_path", lambda: missing_repo)
     monkeypatch.setattr(get_skill, "_packaged_skill_path", lambda: packaged)
@@ -51,7 +51,7 @@ def test_get_skill_main_prints_skill(monkeypatch, capsys) -> None:
 
 
 def test_get_skill_main_writes_to_install_path(monkeypatch, capsys, tmp_path: Path) -> None:
-    target = tmp_path / "agent" / "SKILLS.md"
+    target = tmp_path / "agent" / "SKILL.md"
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install-path", str(target)])
 
     get_skill.main()
@@ -63,7 +63,7 @@ def test_get_skill_main_writes_to_install_path(monkeypatch, capsys, tmp_path: Pa
 
 
 def test_get_skill_main_prints_then_writes(monkeypatch, capsys, tmp_path: Path) -> None:
-    target = tmp_path / "agent" / "SKILLS.md"
+    target = tmp_path / "agent" / "SKILL.md"
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--print", "--install-path", str(target)])
 
     get_skill.main()

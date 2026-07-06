@@ -8,11 +8,11 @@ from pathlib import Path
 
 
 def _repo_skill_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "SKILLS.md"
+    return Path(__file__).resolve().parents[1] / "SKILL.md"
 
 
 def _packaged_skill_path() -> Path:
-    return Path(__file__).with_name("SKILLS.md")
+    return Path(__file__).resolve().parents[1] / "skills" / "simbiology_workflow" / "SKILL.md"
 
 
 def _skill_path() -> Path:
@@ -39,8 +39,8 @@ def _write_skill(path: Path) -> tuple[Path, Path]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILLS.md to stdout.")
-    parser.add_argument("--install-path", help="Write SKILLS.md to the given destination path instead of printing it.")
+    parser.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")
+    parser.add_argument("--install-path", help="Write SKILL.md to the given destination path instead of printing it.")
     if len(sys.argv) == 1:
         parser.print_help()
         return

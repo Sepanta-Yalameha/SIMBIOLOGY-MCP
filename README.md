@@ -66,10 +66,10 @@ Then point your MCP client at the installed `simbiology-mcp` command. To get the
 simbiology-mcp-get-skill
 ```
 
-That helper prints the packaged `SKILLS.md` to the terminal by default. To copy it to a specific location instead, pass an explicit destination:
+That helper prints the packaged `SKILL.md` to the terminal by default. In a source checkout it prefers the repo-root `SKILL.md`; in an installed package it falls back to the bundled workflow skill. To copy it to a specific location instead, pass an explicit destination:
 
 ```powershell
-simbiology-mcp-get-skill --install-path C:\path\to\SKILLS.md
+simbiology-mcp-get-skill --install-path C:\path\to\SKILL.md
 ```
 
 ### 3. Plain `pip`

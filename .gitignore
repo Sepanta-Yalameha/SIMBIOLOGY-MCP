@@ -1,8 +1,10 @@
 .vscode/
 .venv/
+.agents/
 projects/
 CLAUDE.md
 AGENTS.md
+.agents/skills/simbiology/SKILL.md
 docs/
 .env
 out.csv
