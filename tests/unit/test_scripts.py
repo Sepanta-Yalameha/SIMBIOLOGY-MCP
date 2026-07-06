@@ -7,7 +7,11 @@ import pytest
 from scripts import get_skill, setup
 
 
-def test_write_skill_copies_packaged_markdown(tmp_path: Path) -> None:
+def test_skill_path_prefers_repo_root() -> None:
+    assert get_skill._skill_path() == get_skill._repo_skill_path()
+
+
+def test_write_skill_copies_skill_markdown(tmp_path: Path) -> None:
     target = tmp_path / "skills" / "SKILLS.md"
 
     source, written = get_skill._write_skill(target)
@@ -16,6 +20,18 @@ def test_write_skill_copies_packaged_markdown(tmp_path: Path) -> None:
     assert written == target
     assert target.exists()
     assert target.read_text(encoding="utf-8").startswith("---\nname: using-simbiology-mcp")
+
+
+def test_skill_path_falls_back_to_packaged_copy(monkeypatch, tmp_path: Path) -> None:
+    packaged = tmp_path / "scripts" / "SKILLS.md"
+    packaged.parent.mkdir(parents=True)
+    packaged.write_text("packaged skill", encoding="utf-8")
+    missing_repo = tmp_path / "missing" / "SKILLS.md"
+
+    monkeypatch.setattr(get_skill, "_repo_skill_path", lambda: missing_repo)
+    monkeypatch.setattr(get_skill, "_packaged_skill_path", lambda: packaged)
+
+    assert get_skill._skill_path() == packaged
 
 
 def test_get_skill_main_without_args_prints_help(monkeypatch, capsys) -> None:

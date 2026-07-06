@@ -2,6 +2,7 @@
 .venv/
 projects/
 CLAUDE.md
+AGENTS.md
 docs/
 .env
 out.csv

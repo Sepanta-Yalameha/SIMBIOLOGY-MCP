@@ -7,8 +7,19 @@ import sys
 from pathlib import Path
 
 
-def _skill_path() -> Path:
+def _repo_skill_path() -> Path:
+    return Path(__file__).resolve().parents[1] / "SKILLS.md"
+
+
+def _packaged_skill_path() -> Path:
     return Path(__file__).with_name("SKILLS.md")
+
+
+def _skill_path() -> Path:
+    repo_skill = _repo_skill_path()
+    if repo_skill.exists():
+        return repo_skill
+    return _packaged_skill_path()
 
 
 def _skill_text() -> str:
