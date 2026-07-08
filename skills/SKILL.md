@@ -17,8 +17,6 @@ The SimBiology MCP provides tools to:
 
 When the SimBiology MCP tools are available, use them as the primary interface. Avoid issuing raw MATLAB commands or using Python wrappers around MATLAB commands on your own unless the MCP tool surface is missing a capability that is strictly necessary for the task.
 
-***Major correction: the project file is a `.sbproj`, not `.sbol`.***
-
 ## Workflow
 
 Follow this order unless the user explicitly needs something different:
@@ -33,7 +31,7 @@ Follow this order unless the user explicitly needs something different:
 8. Analyze results with MCP analysis tools when possible.
 9. Save the project after the work is complete.
 
-***Major rule: prefer the SimBiology MCP tool surface over ad hoc MATLAB command execution or custom Python-to-MATLAB wrappers.***
+**Always use the SimBiology MCP tools when they are available. Do not bypass them with raw MATLAB commands, handwritten MATLAB snippets, or Python wrappers around MATLAB unless the MCP tool surface is genuinely missing a required capability.**
 
 ## Modeling Terms
 
@@ -150,22 +148,18 @@ Use these patterns whenever they match the biology. If the biology requires some
 | Translation | `mRNA -> Protein` | Usually proportional to mRNA | translation rate constant | Use for production of protein from mRNA. |
 | mRNA loss | `mRNA -> null` | `k_deg_mRNA * mRNA` | mRNA degradation constant | The cheat sheet notes these are generally similar across mRNA species if the model assumes shared degradation constants. |
 | Protein loss | `Protein -> null` | `k_deg_protein * Protein` | protein degradation constant | Use for natural loss/degradation of proteins. |
-| Input-regulated translation / Hill regulation | Varies by system | Hill-style regulatory law | regulator constant such as `K_X`, Hill coefficient if needed, base rate constant | Use when a regulator, inducer, repressor, or toe-hold switch changes expression behavior. |
+| Toe-hold-switch-regulated translation | `mRNA -> Protein` | Hill-style or other regulator-dependent translation law | regulator constant such as `K_X`, translation constant, Hill coefficient if needed | Use when the toe-hold switch changes translation behavior rather than transcription. The regulator reveals the binding site and controls translation. |
+| Input-regulated transcription or translation / Hill regulation | Varies by system | Hill-style regulatory law | regulator constant, Hill coefficient if needed, base rate constant | Use when a regulator, inducer, or repressor changes expression behavior. |
 | Temperature-dependent transcription | `source -> mRNA` | custom temperature-dependent law | temperature term(s), threshold/shape constants, transcription constant | The cheat sheet explicitly says this is not mass action when transcription depends on temperature. |
 | Michaelis-Menten catalysis | `Substrate + Enzyme -> Product + Enzyme` | Michaelis-Menten form | `kcat`, `Km` | The catalyst must appear on both sides because it is not consumed. |
 | Reversible complexation | `A + B <-> AB` | forward association minus reverse dissociation | `k_a`, `k_d` | Use one reversible reaction when appropriate. Forward is association, reverse is dissociation. |
 | Positive induction by complex/regulator | `source -> mRNA` or regulated production step | Hill activation law | regulator constant, Hill coefficient if needed, production constant | Use when a complex such as `AD` positively induces downstream expression. |
 
-## Cheat-Sheet-Derived Modeling Notes
+Use the correct rate law for the biology. Do not force a reaction into a mass-action interpretation if the biology requires a custom rate expression. In this MCP, reaction creation supports a reaction equation plus a `rate` expression; it does not expose a separate kinetic-law selector. In practice, that means:
 
-These points come directly from the SimBiology cheat sheet workflow and are worth preserving:
-
-- Every expressed protein generally has a corresponding mRNA species.
-- Toe-hold-switch-like regulation can affect translation rather than transcription.
-- If SimBiology marks a reaction as unknown, the intended law may need to be switched from the right-side panel in the GUI workflow; in MCP terms, this means you should explicitly use the correct rate law rather than assuming mass action.
-- A biomarker treated as a pure external input may be modeled without degradation if that assumption is intended.
-- Temperature-dependent transcription should be handled as a custom rate law, not ordinary mass action.
-- Complex formation is generally reversible unless the biology says otherwise.
+- use plain mass-action-style rate expressions when the biology is truly mass action
+- use custom rate expressions when the biology calls for Hill regulation, Michaelis-Menten behavior, temperature dependence, or other non-mass-action behavior
+- do not treat an "unknown reaction" style warning as a reason to simplify the biology incorrectly; keep the accurate rate expression
 
 ## Tool Summary
 
