@@ -35,7 +35,7 @@ simbiology-mcp-get-skill = "scripts.get_skill:main"
 
 [tool.setuptools]
 # Flat layout: the server's top-level packages, listed explicitly.
-packages = ["core", "engine", "external", "interfaces", "scripts", "skills", "skills.simbiology_workflow", "tools"]
+packages = ["core", "engine", "external", "interfaces", "scripts", "skills", "tools"]
 
 [tool.setuptools.package-data]
-"skills.simbiology_workflow" = ["SKILL.md"]
+skills = ["SKILL.md"]
