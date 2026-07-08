@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from interfaces import cli
 from scripts import get_skill, setup
 
 
@@ -25,7 +26,7 @@ def test_write_skill_copies_skill_markdown(monkeypatch, tmp_path: Path) -> None:
     assert source == get_skill._skill_path().resolve()
     assert written == target
     assert target.exists()
-    assert target.read_text(encoding="utf-8").startswith("---\nname: using-simbiology-mcp")
+    assert target.read_text(encoding="utf-8") == get_skill._skill_text()
 
 
 def test_skill_path_falls_back_to_packaged_copy(monkeypatch, tmp_path: Path) -> None:
@@ -50,7 +51,7 @@ def test_get_skill_main_prints_skill(monkeypatch, capsys) -> None:
 
     get_skill.main()
 
-    assert "using-simbiology-mcp" in capsys.readouterr().out
+    assert capsys.readouterr().out == f"{get_skill._skill_text()}\n"
 
 
 def test_get_skill_main_writes_to_install_path(monkeypatch, capsys, tmp_path: Path) -> None:
@@ -72,8 +73,46 @@ def test_get_skill_main_prints_then_writes(monkeypatch, capsys, tmp_path: Path) 
     get_skill.main()
 
     output = capsys.readouterr().out
-    assert "using-simbiology-mcp" in output
+    assert get_skill._skill_text() in output
     assert f"Copied skill from {get_skill._skill_path().resolve()} to {target.resolve()}" in output
+
+
+def test_cli_main_without_args_prints_help(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp"])
+
+    cli.main()
+
+    assert "usage:" in capsys.readouterr().out
+
+
+def test_cli_start_dispatches_to_server(monkeypatch) -> None:
+    called: list[str] = []
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "start"])
+    monkeypatch.setattr(cli, "_run_server", lambda: called.append("start"))
+
+    cli.main()
+
+    assert called == ["start"]
+
+
+def test_cli_get_skill_dispatches(monkeypatch) -> None:
+    called: list[list[str]] = []
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill", "--print"])
+    monkeypatch.setattr(get_skill, "main", lambda argv=None: called.append(argv or []))
+
+    cli.main()
+
+    assert called == [["--print"]]
+
+
+def test_cli_setup_dispatches(monkeypatch) -> None:
+    called: list[list[str]] = []
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "setup", "--matlab-index", "1"])
+    monkeypatch.setattr(setup, "main", lambda argv=None: called.append(argv or []))
+
+    cli.main()
+
+    assert called == [["--matlab-index", "1"]]
 
 
 def test_select_matlab_root_prefers_explicit_root() -> None:

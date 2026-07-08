@@ -67,11 +67,11 @@ def select_matlab_root(root_arg, index_arg):
     return installs[idx][1]
 
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--matlab-root")
     parser.add_argument("--matlab-index", type=int)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     matlab_root = select_matlab_root(args.matlab_root, args.matlab_index)
     engine_dir = matlab_root / "extern" / "engines" / "python"

@@ -35,7 +35,7 @@ git clone https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP.git
 cd SIMBIOLOGY-MCP
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
-simbiology-mcp-setup
+simbiology-mcp setup
 ```
 
 Then point your MCP client at the repo entry point:
@@ -57,19 +57,19 @@ Use this when you want a cleaner install without cloning the repo.
 
 ```powershell
 uv tool install simbiology-mcp
-simbiology-mcp-setup
+simbiology-mcp setup
 ```
 
-Then point your MCP client at the installed `simbiology-mcp` command. To get the packaged skill guidance, run:
+Then point your MCP client at the installed `simbiology-mcp` command with the `start` subcommand. To get the packaged skill guidance, run:
 
 ```powershell
-simbiology-mcp-get-skill
+simbiology-mcp get-skill
 ```
 
-That helper prints the packaged `SKILL.md` to the terminal by default. In a source checkout it prefers the repo-root `SKILL.md`; in an installed package it falls back to the bundled workflow skill. To copy it to a specific location instead, pass an explicit destination:
+That helper prints the packaged `SKILL.md` to the terminal by default. To copy it to a specific location instead, pass an explicit destination:
 
 ```powershell
-simbiology-mcp-get-skill --install-path C:\path\to\SKILL.md
+simbiology-mcp get-skill --install-path C:\path\to\SKILL.md
 ```
 
 ### 3. Plain `pip`
@@ -78,8 +78,8 @@ Use this if you do not want `uv tool install`.
 
 ```powershell
 python -m pip install simbiology-mcp
-simbiology-mcp-setup
-simbiology-mcp-get-skill
+simbiology-mcp setup
+simbiology-mcp get-skill
 ```
 
 ---
@@ -102,8 +102,8 @@ Start the server over stdio, either through the repo entry point or the installe
 # from the repo
 .\.venv\Scripts\python.exe .\main.py
 
-# or, after `pip install -e .`
-simbiology-mcp
+# or, after installation
+simbiology-mcp start
 ```
 
 ### Wiring into an MCP client
@@ -114,7 +114,8 @@ Point your MCP client at the server command. A typical stdio configuration for a
 {
   "mcpServers": {
     "simbiology": {
-      "command": "simbiology-mcp"
+      "command": "simbiology-mcp",
+      "args": ["start"]
     }
   }
 }

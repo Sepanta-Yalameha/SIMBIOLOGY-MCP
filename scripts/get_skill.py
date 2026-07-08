@@ -30,14 +30,16 @@ def _write_skill(path: Path) -> tuple[Path, Path]:
     return source, target
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")
     parser.add_argument("--install-path", help="Write SKILL.md to the given destination path instead of printing it.")
-    if len(sys.argv) == 1:
+    if argv is None:
+        argv = sys.argv[1:]
+    if not argv:
         parser.print_help()
         return
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not args.print_skill and args.install_path is None:
         parser.print_help()

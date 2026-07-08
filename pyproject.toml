@@ -29,9 +29,7 @@ dev = ["pytest>=8"]
 matlab = ["matlabengine"]
 
 [project.scripts]
-simbiology-mcp = "interfaces.mcp_server:run"
-simbiology-mcp-setup = "scripts.setup:main"
-simbiology-mcp-get-skill = "scripts.get_skill:main"
+simbiology-mcp = "interfaces.cli:main"
 
 [tool.setuptools]
 # Flat layout: the server's top-level packages, listed explicitly.
