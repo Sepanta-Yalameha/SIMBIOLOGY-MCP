@@ -1,157 +1,200 @@
 ---
-name: using-simbiology-mcp
-description: Use when building, simulating, or reporting on ANY SimBiology model through the SimBiology MCP. Encodes the model-building completeness rules, the "default until asked" principle for all configuration, and the result-reading discipline that prevent wrong answers.
+name: simbiology-workflow
+description: Use when building, modifying, simulating, exporting, or analyzing MATLAB SimBiology models through the SimBiology MCP. Covers project setup, species, parameters, reactions, doses, variants, simulation defaults, export, analysis, and use of PubMed and iGEM tools to ground model constants in real biology.
 ---
 
-# Using the SimBiology MCP
+# SimBiology Workflow
 
-General guidance for driving the SimBiology MCP on **any** project. The MCP itself is only the set
-of tools for manipulating a SimBiology model (species, parameters, compartments, reactions,
-simulation, export). All judgment about *how* to use those tools well lives here, not in the MCP.
+Use this skill when the user wants to model or simulate a genetic circuit, synthetic biology system, PK/PD system, or related biochemical network through the SimBiology MCP.
 
-Nothing below is specific to one model. Where an example is given it is illustrative of a general
-pattern, not a template to copy.
+The SimBiology MCP provides tools to:
 
----
+- create and modify SimBiology projects and models
+- create species, compartments, reactions, parameters, doses, and variants
+- simulate models and export results
+- analyze exported CSV outputs
+- search PubMed and the iGEM Registry for supporting biological information
 
-## Governing principle: default until asked
+When the SimBiology MCP tools are available, use them as the primary interface. Avoid issuing raw MATLAB commands or using Python wrappers around MATLAB commands on your own unless the MCP tool surface is missing a capability that is strictly necessary for the task.
 
-**Leave every configurable choice at its SimBiology default until the user asks for something
-different.** This is a default-not-a-mandate: if the user wants to change it, change it freely and
-without pushback. You are not being asked to lock defaults down - you are being asked not to
-*silently* diverge from them.
+***Major correction: the project file is a `.sbproj`, not `.sbol`.***
 
-This applies to, at minimum:
+## Workflow
 
-- **Solver** (default `ode15s`), **absolute tolerance** (`1e-6`), **relative tolerance** (`1e-3`),
-  and **maximum number of logs** (`Inf`). Do not change these unless asked or unless the task
-  clearly requires it.
-- **Stop time** - leave the default unless the task specifies a simulation duration.
-- **Output/time grid, plotting choices, file paths, units of display** - default unless asked.
-- **Initial amounts/concentrations** - whatever the model/problem defines; don't invent them.
+Follow this order unless the user explicitly needs something different:
 
-If the user says "I want RelTol at 1e-6" or "use ode23t" or "simulate for 5000 minutes" - do
-exactly that. The rule is *don't diverge from default on your own initiative*, not *never diverge*.
+1. Understand the biology and plan the circuit before editing the model.
+2. Identify all species, reactions, parameters, compartments, and assumptions.
+3. Create or load the `.sbproj` and select the correct model.
+4. Build the model completely.
+5. Configure simulation only as needed.
+6. Run the simulation.
+7. Export CSV and PNG results.
+8. Analyze results with MCP analysis tools when possible.
+9. Save the project after the work is complete.
 
-This principle is what keeps the skill unbiased: it works for the person who wants stock behavior
-and the person who wants full manual control.
+***Major rule: prefer the SimBiology MCP tool surface over ad hoc MATLAB command execution or custom Python-to-MATLAB wrappers.***
 
-## Model-building completeness (NOT optional, never "default until asked")
+## Modeling Terms
 
-Configuration is left at default; **model correctness is not**. A model must be built completely and
-correctly every time. The following are requirements, not preferences:
+- **Species**: Any quantity that changes over time, such as proteins, mRNA, complexes, metabolites, or input molecules.
+- **Reactions**: Creation, loss, binding, conversion, catalysis, transcription, translation, or other dynamic processes involving species.
+- **Parameters**: Constants used in rate laws or initialization, such as rate constants, Hill constants, Michaelis-Menten constants, temperature constants, and volume terms.
+- **Compartment**: The physical region containing the species, usually a cell or reactor volume.
 
-- **Create EVERY parameter the model references.** A rate law that names a constant requires that
-  constant to exist as a parameter. Missing parameters are the most common build error.
-- **Give EVERY parameter its units.** Set units on each parameter to match the source
-  (`1/minute`, `molarity`, `molarity/minute`, `1/(minute*molarity)`, `kelvin`, dimensionless, etc.).
-  A parameter with no units is a defect, even if the number is right. (In the first pass on a model
-  it is easy to create parameters and forget the units - check every one before simulating.)
-- **Give species their correct units/dimension** (amount vs. concentration) and initial values.
-- **Set the compartment volume/capacity whenever the problem gives one.** If a cell volume,
-  reactor volume, or compartment size is specified, enter it. Always support setting it; never
-  assume it is 1 and never assume it is irrelevant. It is part of a faithful model.
-- **Build every reaction the biology/chemistry requires** - see the correctness rules below.
+## Model Creation
 
-Think of it as two separate concerns: *is the model a faithful, complete representation?* (always
-yes) versus *which optional settings did I change?* (none, unless asked).
+Plan the circuit before creating anything. Identify:
 
-## The compartment volume - set it, and understand when it matters
+- all species
+- all reactions
+- all parameters and constants
+- all compartments
+- all external inputs
+- all outputs the user cares about
 
-- **If the problem gives a compartment/cell volume, set it.** This is always allowed and usually
-  expected. Do not skip it and do not hardcode assumptions from some other project.
-- **Do not divide rate constants by the volume unless the rate law explicitly says to.** Enter
-  given rate constants as given. Inventing a volume division is a modeling error.
-- **Know the dimensional behavior:** for concentration-dimension (molarity) species in a single
-  compartment, `d[S]/dt = reaction rate` - the compartment volume does not divide the rate, so
-  setting the volume is faithful bookkeeping but won't rescale a concentration result. For
-  amount-dimension species, volume does enter concentration conversions. Either way: set the volume
-  when given; don't use it to fudge rate constants.
+Then:
 
-## Simulation settings - the one footgun to know
+- If this is a new project, create a new `.sbproj`, a model, and a compartment.
+- If this is an existing project, load the `.sbproj` and select the correct model.
+- When creating a compartment, always provide a capacity. In most synthetic biology cases this is the cell volume.
+- Every species must have units.
+- Every parameter must have a numerical value and units.
+- Every reaction rate law must be dimensionally consistent.
 
-Even though settings are left at default, know **why** one default matters:
+## Completeness Rules
 
-- **`MaximumNumberOfLogs` is a STOP condition, not a verbosity control.** The run halts once that
-  many points are logged. If it is set low, the simulation stops early and every species reads a
-  not-yet-converged value - which looks exactly like a broken model. Leave it at the default (`Inf`)
-  unless the user asks otherwise. If you want a smaller returned payload, request fewer species or
-  read only the final point - do **not** lower the log cap to achieve that.
-- If a run's final time point is far below the stop time, the run was **truncated** - re-check the
-  log cap and stop time before interpreting any value.
+Build the model completely before simulating.
 
-## Reading results correctly
+- If the system produces a protein, include transcription to its mRNA, translation from mRNA to protein, mRNA loss, and protein loss.
+- All internal species should generally have a loss or degradation reaction.
+- A pure external input signal may be exempt from degradation if that is the intended assumption.
+- Do not create unused parameters unless they have a clear purpose in the model.
+- Validate constants with iGEM, PubMed, or other scientific sources when possible.
 
-- **A steady-state value is the last point of the returned trace**, converted into the units the
-  question uses (raw output is mol/L; x1e9 -> nM, x1e6 -> uM).
-- If a value is off by orders of magnitude from an expectation, suspect **settings (truncation) or
-  units first - not the reactions.** The model is usually right. Do not jump to an external
-  Python/MATLAB replica as a "workaround"; that hides the real cause instead of fixing it.
-- "Time to steady state" = first time the curve is within ~0.1% of its final value.
+***Major correction: every species should not merely "interact with the rest of the simulation"; it should have the specific production, consumption, and loss processes required by the biology.***
 
-## Export discipline
+## Simulation
 
-- **Use the MCP export tools for deliverables.** If the user wants a plot or CSV, use
-  `export_graph` / `export_csv` with their labeling and column options instead of writing ad hoc
-  MATLAB scripts, PowerShell, Python, or Matplotlib helpers on the side.
-- If the current export tool surface is missing a needed option, **extend the MCP/export tool**
-  rather than escaping into one-off scripts. The durable fix is better tool capability, not a
-  parallel plotting path the next agent will rediscover badly.
-- When exporting a figure, set a meaningful title and axis labels when the task implies them.
-  Avoid leaving the default generic "States" style output if the question is about a named
-  quantity, condition, or unit.
+Once the model is complete:
 
-## State mutation - restore what you change
+- configure stop time
+- leave the default differential equation solver unless the user requests something else
+- use doses or variants when the user wants time-dependent or scenario-dependent changes
+- run the simulation and inspect the time course of the species
 
-- `modify_parameter` / `modify_species` **persist** on the model. After a sweep (e.g. varying a
-  binding constant, stepping temperature, scaling a rate) the model is left modified, which corrupts
-  later runs and anything you save.
-- **Restore every parameter/species you changed**, or record the originals first and set them back.
-- Prefer **variants** for alternate conditions. Per-run `variants`/`species`/`doses` are honored by
-  simulation and export **without mutating** the base model - the clean way to run scenarios.
+### Doses
 
-## Model-building correctness rules (generic)
+Use a **dose** when something changes during the simulation at a defined time or schedule.
 
-All of these are general modeling requirements, independent of any specific project:
+Examples:
 
-- **Every expressed protein needs its full chain:** transcription (-> mRNA), translation
-  (mRNA -> protein), and the corresponding degradation/loss reactions. Don't give a protein a
-  translation step with no mRNA.
-- **Catalysis does not consume the catalyst.** In an enzymatic step the enzyme appears on **both
-  sides** (`S + E -> P + E`), with rate e.g. `kcat*E*S/(Km+S)`. Writing `S + E -> P` is wrong.
-- **A reversible complex is ONE reversible reaction:** `A + B <-> AB`, `reversible = true`, rate
-  `k_a*A*B - k_d*AB`. Don't model association without dissociation.
-- **Don't invent parameters or terms that the problem doesn't define** (including spurious volume
-  divisions). If a value is given, use it as given.
-- **Hill activation with h=1** is `R/(K+R)`. General Hill is `R^h/(K^h+R^h)`.
-- **Logistic/temperature activation** is `1/(1+exp(-(x-x_half)/s))` - the scale `s` **divides**
-  `(x-x_half)`. Convert units to match the half-point (e.g. C->K if the half-point is in kelvin).
-  Sign and divide-vs-multiply errors silently shift the curve.
+- inject or add an input molecule at a certain time
+- repeatedly add a species
+- apply a schedule of concentration changes
 
-## Cumulative / multi-stage models
+Typical dose information includes:
 
-- When a downstream reaction **drains** an intermediate, that intermediate's steady state in the
-  full model is lower than in the isolated sub-model.
-- Answer a stage-specific question on that stage's circuit. To read the undrained value, disable
-  the draining reaction (set its rate to 0) or simulate the sub-stage - don't report the drained
-  full-model value as if it were the isolated one.
+- target species
+- amount
+- time
+- rate
+- repeat/schedule settings
 
-## Saving projects
+### Variants
 
-- After `save_project`, check `list_models` for accidental **duplicate models**; save a clean
-  single-model project rather than accumulating copies.
-- If the user needs to press Run in the SimBiology desktop GUI, note that a project may need a
-  simulation **Program/analysis task** present to be runnable - tell them rather than letting them
-  hit "No Program in Project."
+Use a **variant** for named model overrides that define a scenario without permanently changing the base model structure.
 
-## Pre-flight checklist (run before reporting any number)
+Variants are useful for:
 
-1. **Completeness:** all referenced parameters created, all with units; species dimensions/initials
-   set; compartment volume set if given.
-2. **Settings:** left at default unless the user asked otherwise; `max_number_of_logs` not lowered;
-   run reached its stop time (not truncated).
-3. **Reading:** used the **final** time point, in the **right units**.
-4. **State:** restored any parameter/species changed during a sweep.
-5. **Correctness:** enzyme on both sides of catalysis, complexes reversible, no invented terms or
-   volume divisions, Hill/logistic forms right.
-6. **Staging:** for a stage-specific value, accounted for any downstream draining.
+- knockouts
+- overexpression scenarios
+- changing parameter values for alternative experimental conditions
+- changing species initial amounts
+- changing compartment properties for a scenario
+
+In this MCP, variant content is a list of entries with:
+
+- `type`
+- `name`
+- `property`
+- `value`
+
+Practical guidance:
+
+- create variants before simulation when the user wants alternate model conditions
+- prefer variants over repeatedly mutating the base model for scenario testing
+- keep each variant internally coherent and clearly named
+- remember that modifying a variant replaces its full content, so provide the complete intended variant definition
+
+***Major addition: variants are for alternate named model states, while doses are for changes applied during a run over time.***
+
+## Export and Analysis
+
+After simulation:
+
+- export the results to CSV
+- export the graph to PNG
+- use the analysis MCP tools whenever possible instead of manually scanning large outputs
+- save the project after the work is complete
+
+Use analysis tools first when available because they reduce token waste and keep analysis reproducible.
+
+## Common Reaction Types
+
+Use these patterns whenever they match the biology. If the biology requires something else, identify the correct reaction and rate law explicitly.
+
+| Reaction type | Equation pattern | Rate pattern | Parameters needed | Notes |
+| --- | --- | --- | --- | --- |
+| Transcription | `source -> mRNA` | Usually constant or promoter-specific | transcription rate constant | Use for gene expression into mRNA. |
+| Translation | `mRNA -> Protein` | Usually proportional to mRNA | translation rate constant | Use for production of protein from mRNA. |
+| mRNA loss | `mRNA -> null` | `k_deg_mRNA * mRNA` | mRNA degradation constant | The cheat sheet notes these are generally similar across mRNA species if the model assumes shared degradation constants. |
+| Protein loss | `Protein -> null` | `k_deg_protein * Protein` | protein degradation constant | Use for natural loss/degradation of proteins. |
+| Input-regulated translation / Hill regulation | Varies by system | Hill-style regulatory law | regulator constant such as `K_X`, Hill coefficient if needed, base rate constant | Use when a regulator, inducer, repressor, or toe-hold switch changes expression behavior. |
+| Temperature-dependent transcription | `source -> mRNA` | custom temperature-dependent law | temperature term(s), threshold/shape constants, transcription constant | The cheat sheet explicitly says this is not mass action when transcription depends on temperature. |
+| Michaelis-Menten catalysis | `Substrate + Enzyme -> Product + Enzyme` | Michaelis-Menten form | `kcat`, `Km` | The catalyst must appear on both sides because it is not consumed. |
+| Reversible complexation | `A + B <-> AB` | forward association minus reverse dissociation | `k_a`, `k_d` | Use one reversible reaction when appropriate. Forward is association, reverse is dissociation. |
+| Positive induction by complex/regulator | `source -> mRNA` or regulated production step | Hill activation law | regulator constant, Hill coefficient if needed, production constant | Use when a complex such as `AD` positively induces downstream expression. |
+
+## Cheat-Sheet-Derived Modeling Notes
+
+These points come directly from the SimBiology cheat sheet workflow and are worth preserving:
+
+- Every expressed protein generally has a corresponding mRNA species.
+- Toe-hold-switch-like regulation can affect translation rather than transcription.
+- If SimBiology marks a reaction as unknown, the intended law may need to be switched from the right-side panel in the GUI workflow; in MCP terms, this means you should explicitly use the correct rate law rather than assuming mass action.
+- A biomarker treated as a pure external input may be modeled without degradation if that assumption is intended.
+- Temperature-dependent transcription should be handled as a custom rate law, not ordinary mass action.
+- Complex formation is generally reversible unless the biology says otherwise.
+
+## Tool Summary
+
+The MCP exposes the following tool groups:
+
+| Tool name | Description | Inputs | Outputs |
+| --- | --- | --- | --- |
+| `load_project`, `create_project`, `save_project` | Load, create, and persist SimBiology projects. | Project path, model name, save target. | Confirmation plus project/model metadata. |
+| `create_model`, `rename_model`, `remove_model`, `list_models` | Manage models inside the loaded project. | Model name or rename target. | Confirmation or model name lists. |
+| `create_compartment`, `modify_compartment`, `remove_compartment`, `list_compartments` | Manage compartments. | Names plus compartment properties such as capacity and units. | Confirmation or compartment data. |
+| `create_species`, `modify_species`, `remove_species`, `list_species` | Manage species. | Names plus species properties such as initial amount and units. | Confirmation or species data. |
+| `create_reaction`, `modify_reaction`, `remove_reaction`, `list_reactions` | Manage reactions and rate expressions. | Reactants, products, reversibility, rate law fields. | Confirmation or reaction data. |
+| `create_parameter`, `modify_parameter`, `remove_parameter`, `list_parameters` | Manage model parameters. | Names, values, units, and scope. | Confirmation or parameter data. |
+| `get_simulation_settings`, `configure_simulation`, `simulate_model` | Inspect, configure, and run simulations. | Solver/settings fields, optional `species`, `doses`, `variants`, and output limits. | Current settings or simulation result rows. |
+| `create_dose`, `modify_dose`, `remove_dose`, `list_doses` | Manage repeat and schedule doses. | Dose type, target, timing, amount/rate fields. | Confirmation or dose data. |
+| `create_variant`, `modify_variant`, `remove_variant`, `list_variants` | Manage named model overrides. | Variant name and full content entries. | Confirmation or variant data. |
+| `export_graph`, `export_csv` | Export the same run used by `simulate_model` to PNG or CSV. | Optional path plus optional `species`, `doses`, and `variants`. | File metadata or inline CSV text. |
+| `list_series`, `steady_state`, `series_min`, `series_max` | Analyze exported CSV data without rerunning MATLAB. | CSV path and target series name. | Series names or computed values. |
+| `pubmed_search`, `pubmed_summary`, `pubmed_article` | Pull literature context from PubMed. | Query, PubMed ID, and summary options. | Search hits, article details, or summaries. |
+| `igem_part`, `igem_search`, `igem_search_best` | Look up parts from the iGEM registry. | Exact identifier or free-text query. | Part records or ranked matches. |
+
+## Rules
+
+- Ground the model in real science. Use the iGEM Registry tools, PubMed tools, and other reliable sources as needed.
+- Ensure the model is complete before running a simulation.
+- Ensure all parameters have accurate values and units.
+- Ensure each rate law is dimensionally consistent.
+- Export results to CSV and PNG when the user needs outputs or analysis.
+- Prefer the common reaction patterns above when they fit the biology.
+- Use MCP analysis tools whenever possible instead of manually parsing large exported outputs.
+
+***Major correction: this skill should guide the agent toward the MCP tool surface first, not toward ad hoc manual analysis or external scripting unless the MCP tools are missing a needed capability.***
