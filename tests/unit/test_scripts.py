@@ -29,6 +29,25 @@ def test_write_skill_copies_skill_markdown(monkeypatch, tmp_path: Path) -> None:
     assert target.read_text(encoding="utf-8") == get_skill._skill_text()
 
 
+def test_write_skill_treats_directory_as_install_folder(tmp_path: Path) -> None:
+    target_dir = tmp_path / "agent"
+    target_dir.mkdir()
+
+    _, written = get_skill._write_skill(target_dir)
+
+    assert written == target_dir / "SKILL.md"
+    assert written.read_text(encoding="utf-8") == get_skill._skill_text()
+
+
+def test_write_skill_treats_extensionless_path_as_install_folder(tmp_path: Path) -> None:
+    target_dir = tmp_path / "agent"
+
+    _, written = get_skill._write_skill(target_dir)
+
+    assert written == target_dir / "SKILL.md"
+    assert written.read_text(encoding="utf-8") == get_skill._skill_text()
+
+
 def test_skill_path_falls_back_to_packaged_copy(monkeypatch, tmp_path: Path) -> None:
     packaged = tmp_path / "skills" / "SKILL.md"
     packaged.parent.mkdir(parents=True)

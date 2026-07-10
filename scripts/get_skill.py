@@ -19,9 +19,16 @@ def _skill_text() -> str:
     return _skill_path().read_text(encoding="utf-8")
 
 
+def _install_target(path: Path) -> Path:
+    expanded = path.expanduser()
+    if (expanded.exists() and expanded.is_dir()) or expanded.suffix == "":
+        expanded = expanded / "SKILL.md"
+    return expanded.resolve()
+
+
 def _write_skill(path: Path) -> tuple[Path, Path]:
     source = _skill_path().resolve()
-    target = path.expanduser().resolve()
+    target = _install_target(path)
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(_skill_text(), encoding="utf-8")
