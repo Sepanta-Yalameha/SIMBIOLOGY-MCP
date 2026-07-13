@@ -65,6 +65,7 @@ Then:
 Build the model completely before simulating.
 
 - If the system produces a protein, include transcription to its mRNA, translation from mRNA to protein, mRNA loss, and protein loss.
+- Treat enzymes like any other expressed protein unless the prompt explicitly says they are externally supplied or already present. If the model contains an enzyme species, usually also create its mRNA plus the transcription, translation, mRNA-loss, and protein-loss reactions that produce and clear it.
 - All internal species should generally have a loss or degradation reaction.
 - A pure external input signal may be exempt from degradation if that is the intended assumption.
 - Do not create unused parameters unless they have a clear purpose in the model.
@@ -151,18 +152,22 @@ Use these patterns whenever they match the biology. If the biology requires some
 | Positive regulator on promoter | `null -> mRNA_E` with reaction name like `E_trsc` | `k_trsc_E*((R/K_R)/(1+R/K_R))` | `k_trsc_E`, `K_R`, species `R` | Use when a promoter is positively regulated by a complex or regulator. |
 | Negative regulator on promoter | `null -> mRNA_E` with reaction name like `E_trsc` | `k_trsc_E*(1/(1+R/K_R))` | `k_trsc_E`, `K_R`, species `R` | Use when a promoter is negatively regulated or repressed by a regulator. |
 | pH-regulated promoter | `null -> mRNA_E` with reaction name like `E_trsc` | use the positive or negative regulator form with `[H+]` as the regulator | `k_trsc_E`, `K_H`, effective regulator term for `[H+]` | Frame this as **H+-activated** or **H+-repressed** promoter regulation. Lower pH means higher `[H+]`; higher pH means lower `[H+]`. |
-| Toe-hold-switch-regulated translation | `mRNA_B -> mRNA_B + B` with reaction name like `B_trsl` | `k_trsl_B*((X/K_X)/(1+X/K_X))` | `k_trsl_B`, `K_X`, species `X` | Use when the coding sequence / translation step is positively regulated by a biomarker or toe-hold switch. |
+| Toe-hold-switch-regulated translation | `mRNA_B -> mRNA_B + B` with reaction name like `B_trsl` | `rate = k_trsl_B*(X/(K_X+X))` | `k_trsl_B`, `K_X`, species `X` | Use when the coding sequence / translation step is positively regulated by a biomarker or toe-hold switch. The biomarker is a regulator, not a reactant: do not multiply the activation term by `mRNA_B` again. |
 | Negative regulator on translation | `mRNA_B -> mRNA_B + B` with reaction name like `B_trsl` | `k_trsl_B*(1/(1+R/K_R))` | `k_trsl_B`, `K_R`, species `R` | Use when a coding sequence or translation step is negatively regulated. |
 | Heat-activated temperature-dependent transcription | `null -> mRNA_C` with reaction name like `C_trsc` | `k_trsc_C*(1/(1+exp(-(Temp-Temp_half)/sigma)))` | `k_trsc_C`, `Temp`, `Temp_half`, `sigma` | Use when higher temperature increases promoter activity. `Temp` is typically in Kelvin. |
 | Cold-activated temperature-dependent transcription | `null -> mRNA_C` with reaction name like `C_trsc` | `k_trsc_C*(1/(1+exp((Temp-Temp_half)/sigma)))` | `k_trsc_C`, `Temp`, `Temp_half`, `sigma` | Use when lower temperature increases promoter activity. This is the inverse orientation of the heat-activated logistic form. |
 | Michaelis-Menten catalysis | `B + C -> B + D` with reaction name like `Catalysis` | `kcat*B*C/(Km+C)` | `kcat`, `Km` | The catalyst is not consumed, so it appears on both sides. |
-| Reversible complexation | `A + D <-> AD` with reaction name like `Complexation` | `ka*A*D - kd*AD` | `ka`, `kd` | Use for reversible binding / complex formation. |
+| Reversible complexation | `A + D <-> AD` with reaction name like `Complexation` | `ka*A*D - kd*AD` | `ka`, `kd` | Use for reversible binding / complex formation. Model this as one reversible reaction with a net rate of forward minus reverse, not as two separate reactions unless the prompt explicitly requires that structure. |
 | General Hill-style regulation | Varies by system | use the problem-specific activation or repression expression | regulator constant(s), Hill coefficient if needed, base rate constant | Use when the system statement explicitly describes promoter or coding-sequence regulation. |
 
 Use the correct rate law for the biology. Do not force a reaction into a mass-action interpretation if the biology requires a custom rate expression. In this MCP, reaction creation supports a reaction equation plus a `rate` expression; it does not expose a separate kinetic-law selector. In practice, that means:
 
 - use plain mass-action-style rate expressions when the biology is truly mass action
 - use custom rate expressions when the biology calls for Hill regulation, Michaelis-Menten behavior, temperature dependence, or other non-mass-action behavior
+- for reversible reactions, prefer one `<->` reaction with a single net rate expression such as `k_a*Protein_A*Protein_D - k_d*AD` instead of splitting it into separate forward and reverse reactions, unless the prompt explicitly requires separate reactions
+- if a species acts as a catalyst or enzyme in a reaction, include it on both sides of the reaction equation so it cancels out instead of being consumed
+- for biomarker-gated or other regulator-gated transcription/translation, keep the regulator in the rate law and keep the expression species on its normal production/consumption pattern; do not turn the regulator into an extra reactant or multiply the activation term by the expression species again
+- if a reaction rate looks dimensionally awkward, re-check the topology and intended biology from the ground up before patching the equation; do not “repair” units by inventing extra reactants, factors, or helper variables unless the biology really requires them
 - do not treat an "unknown reaction" style warning as a reason to simplify the biology incorrectly; keep the accurate rate expression
 
 ## Helpful Equations
@@ -178,7 +183,7 @@ Use these equation patterns directly when they match the biology described by th
 | Positive regulation / Hill-style activation | `rate = k*((R/K_R)/(1+R/K_R))` |
 | Negative regulation / Hill-style repression | `rate = k*(1/(1+R/K_R))` |
 | pH-regulated promoter | `rate = k*(( [H+]/K_H )/(1+[H+]/K_H))` for H+-activated regulation, or `rate = k*(1/(1+[H+]/K_H))` for H+-repressed regulation |
-| Toe-hold-switch-regulated translation | `rate = k_trsl_B*((X/K_X)/(1+X/K_X))` |
+| Toe-hold-switch-regulated translation | `rate = k_trsl_B*(X/(K_X+X))` |
 | Negative regulation of translation | `rate = k_trsl_B*(1/(1+R/K_R))` |
 | Negative regulation of transcription | `rate = k_trsc_E*(1/(1+R/K_R))` |
 | Heat-activated temperature-sensitive promoter | `rate = k_trsc_C*(1/(1+exp(-(Temp-Temp_half)/sigma)))` |
@@ -191,6 +196,8 @@ Notes:
 
 - If a promoter is being regulated, the regulation typically affects **transcription**.
 - If a coding sequence or translation-related element such as a toe-hold switch is being regulated, the regulation typically affects **translation**.
+- If a protein is labeled or described as an enzyme, do not jump straight to the catalytic reaction unless the prompt explicitly says the enzyme is externally supplied; usually you must also model how that enzyme is expressed.
+- Catalysts are conserved across the elementary reaction they catalyze. Write them on both sides, for example `E + S -> E + P`, unless the biology explicitly says the catalyst is consumed or modified.
 - pH-style regulation should be framed in terms of `[H+]`, not informal “low pH vs high pH” language alone. If the system activates as pH drops, that means it is **H+-activated** because `[H+]` increases as pH decreases.
 - Heat-dependent and cold-dependent regulation use opposite logistic orientations; choose the sign that matches whether activity should increase with higher temperature or lower temperature.
 
