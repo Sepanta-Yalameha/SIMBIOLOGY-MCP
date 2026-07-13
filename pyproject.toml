@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["coverage>=7", "pytest>=8"]
 # 'matlab' pulls matlabengine from PyPI, whose version must match your installed
 # MATLAB release. On Windows, setup_venv.ps1 installs it straight from your local
 # MATLAB instead; prefer that unless you know the PyPI version lines up.
@@ -37,3 +37,10 @@ packages = ["core", "engine", "external", "interfaces", "scripts", "skills", "to
 
 [tool.setuptools.package-data]
 skills = ["SKILL.md"]
+
+[tool.coverage.run]
+source = ["core", "engine", "external", "interfaces", "scripts", "skills", "tools"]
+
+[tool.black]
+line-length = 200
+target-version = ["py312"]

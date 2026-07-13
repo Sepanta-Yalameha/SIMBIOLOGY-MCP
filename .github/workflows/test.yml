@@ -27,4 +27,14 @@ jobs:
           uv sync --extra dev
 
       - name: Run tests
-        run: uv run pytest -v -m "not matlab and not live"
+        run: |
+          uv run coverage run -m pytest -v -m "not matlab and not live"
+          uv run coverage report --show-missing
+          uv run coverage html
+
+      - name: Upload coverage HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov/

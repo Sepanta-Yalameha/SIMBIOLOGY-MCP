@@ -12,6 +12,8 @@ out.csv
 **/__pycache__/
 *.pyc
 .pytest_cache/
+.coverage
+htmlcov/
 # Packaging build artifacts
 build/
 dist/
