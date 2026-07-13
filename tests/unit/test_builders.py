@@ -12,6 +12,7 @@ import pytest
 from core.sbio_model import (
     SbioModel,
     build_reaction_equation,
+    split_reaction_equation,
     _split_reaction_spec,
     to_matlab_number,
     to_matlab_string,
@@ -66,15 +67,19 @@ def test_add_parameter_cmd_with_units(model):
 
 
 def test_add_reaction_cmd_without_rate(model):
-    assert model.add_reaction_cmd("rx", "a -> b") == ("rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx');")
+    assert model.add_reaction_cmd("rx", "a -> b") == ("rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); try, rxnObj.Reaction.Text.Location = 'top'; catch, end;")
 
 
 def test_add_reaction_cmd_with_rate(model):
-    assert model.add_reaction_cmd("rx", "a -> b; k * a") == ("rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); " "rxnObj.ReactionRate = 'k * a';")
+    assert model.add_reaction_cmd("rx", "a -> b; k * a") == (
+        "rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); try, rxnObj.Reaction.Text.Location = 'top'; catch, end; " "rxnObj.ReactionRate = 'k * a';"
+    )
 
 
 def test_add_reaction_cmd_with_numeric_rate(model):
-    assert model.add_reaction_cmd("rx", "a -> b; 1") == ("rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); " "rxnObj.ReactionRate = 1.0;")
+    assert model.add_reaction_cmd("rx", "a -> b; 1") == (
+        "rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); try, rxnObj.Reaction.Text.Location = 'top'; catch, end; " "rxnObj.ReactionRate = 1.0;"
+    )
 
 
 def test_build_reaction_equation_structured():
@@ -83,6 +88,11 @@ def test_build_reaction_equation_structured():
     assert build_reaction_equation("null", "mRNA_LacI") == "null -> mRNA_LacI"
     assert build_reaction_equation("mRNA_LacI", "null") == "mRNA_LacI -> null"
     assert build_reaction_equation("A", "B", reversible=True) == "A <-> B"
+
+
+def test_split_reaction_equation():
+    assert split_reaction_equation("A -> B") == ("A", "B", False)
+    assert split_reaction_equation("A <-> B") == ("A", "B", True)
 
 
 # --- delete / rename builders ---
