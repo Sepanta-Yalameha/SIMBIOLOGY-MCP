@@ -24,6 +24,18 @@ def test_igem_part_rejects_free_text() -> None:
         igem_part("lacI coding sequence")
 
 
+def test_igem_client_failure_is_reported_gracefully(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        def connect(self) -> None:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(igem, "Client", FakeClient)
+    igem._client.cache_clear()
+
+    with pytest.raises(igem.IgemUnavailableError, match="iGEM tools are currently unavailable"):
+        igem.part("BBa_J23100")
+
+
 def test_igem_part_fetches_by_slug(monkeypatch: pytest.MonkeyPatch) -> None:
     client = object()
     calls: list[Any] = []

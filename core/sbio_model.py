@@ -37,6 +37,19 @@ def _split_reaction_spec(equation: str) -> tuple[str, str | None]:
     return reaction, rate
 
 
+def split_reaction_equation(equation: str) -> tuple[str, str, bool]:
+    """Split a SimBiology reaction equation into left/right strings and arrow kind."""
+
+    text = equation.strip()
+    if "<->" in text:
+        left, right = text.split("<->", 1)
+        return left.strip(), right.strip(), True
+    if "->" in text:
+        left, right = text.split("->", 1)
+        return left.strip(), right.strip(), False
+    raise ValueError(f"Unsupported reaction equation {equation!r}.")
+
+
 def build_reaction_equation(
     left: str,
     right: str,
@@ -55,6 +68,12 @@ def _format_reaction_rate(rate: str) -> str:
         return to_matlab_number(float(rate))
     except ValueError:
         return to_matlab_string(rate)
+
+
+def _reaction_label_cmd(obj: str = "rxnObj") -> str:
+    """Best-effort diagram label placement for newly created reactions."""
+
+    return f"try, {obj}.Reaction.Text.Location = 'top'; catch, end;"
 
 
 def _finite_or_none(value: Any) -> Any:
@@ -290,7 +309,7 @@ class SbioModel:
 
     def add_reaction_cmd(self, name: str, equation: str) -> str:
         reaction, rate = _split_reaction_spec(equation)
-        command = f"rxnObj = addreaction({self.var},{to_matlab_string(reaction)}); set(rxnObj,'Name',{to_matlab_string(name)});"
+        command = f"rxnObj = addreaction({self.var},{to_matlab_string(reaction)}); " f"set(rxnObj,'Name',{to_matlab_string(name)}); " f"{_reaction_label_cmd()}"
         return command if rate is None else f"{command} rxnObj.ReactionRate = {_format_reaction_rate(rate)};"
 
     def add_compartment_cmd(self, name: str, capacity: float = 1.0, units: str | None = None) -> str:

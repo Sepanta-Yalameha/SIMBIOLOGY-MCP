@@ -37,3 +37,7 @@ class ModelNotFoundError(SbioError):
 
 class ElementNotFoundError(SbioError):
     """Raised when a named species/reaction/compartment/parameter does not exist."""
+
+
+class AutosaveError(SbioError):
+    """Raised when a mutation succeeds in memory but writing the recovery project fails."""

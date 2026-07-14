@@ -4,7 +4,7 @@
 projects/
 CLAUDE.md
 AGENTS.md
-.agents/skills/simbiology/SKILL.md
+*.sbproj
 docs/
 .env
 out.csv
@@ -19,3 +19,4 @@ build/
 dist/
 *.egg-info/
 *.whl
+

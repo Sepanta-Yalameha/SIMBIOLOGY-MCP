@@ -74,6 +74,9 @@ class DummyModel:
     def reactions(self) -> list[str]:
         return ["R1"]
 
+    def get_reaction(self, name: str) -> dict[str, object]:
+        return {"Name": name, "Reaction": "A -> B", "Reversible": False}
+
     def compartments(self) -> list[str]:
         return ["cell"]
 
@@ -173,8 +176,10 @@ class DummyModel:
 class DummyService:
     def __init__(self) -> None:
         self.project_path = "demo.sbproj"
+        self.temp_project_path = "demo_temp.sbproj"
         self.commands: list[str] = []
         self.model = DummyModel()
+        self.autosave_calls = 0
 
     def load_project(self, path: str) -> list[str]:
         self.project_path = path
@@ -183,23 +188,30 @@ class DummyService:
     def create_project(self, model_name: str, path: str | None = None) -> list[str]:
         self.project_path = path or f"{model_name}.sbproj"
         self.model = DummyModel(name=model_name)
+        self.autosave_mutation()
         return [model_name]
 
     def save_project(self, path: str | None = None) -> None:
         if path is not None:
             self.project_path = path
 
+    def autosave_mutation(self) -> None:
+        self.autosave_calls += 1
+
     def create_model(self, name: str) -> DummyModel:
         self.model = DummyModel(name=name)
+        self.autosave_mutation()
         return self.model
 
     def rename_model(self, old_name: str, new_name: str) -> DummyModel:
         assert old_name == self.model.name
         self.model.name = new_name
+        self.autosave_mutation()
         return self.model
 
     def delete_model(self, name: str) -> None:
         self.commands.append(f"delete_model:{name}")
+        self.autosave_mutation()
 
     def model_names(self) -> list[str]:
         return [self.model.name]
@@ -254,6 +266,7 @@ def test_project_and_model_tools(svc: DummyService) -> None:
     assert sbio_tools.remove_model("renamed") == {"removed": "renamed"}
     assert sbio_tools.list_models() == ["renamed"]
     assert "delete_model:renamed" in svc.commands
+    assert svc.autosave_calls == 4
 
 
 def test_read_tools(svc: DummyService) -> None:
@@ -299,7 +312,6 @@ def test_structure_tools_issue_expected_commands(svc: DummyService) -> None:
     assert sbio_tools.modify_reaction("rx1", left="B", right="C", reversible=False, rate="k2*B") == {
         "name": "rx1",
         "reaction": "B -> C",
-        "reversible": False,
         "rate": "k2*B",
     }
     assert sbio_tools.remove_reaction("rx1") == {"removed": "rx1"}
@@ -324,12 +336,13 @@ def test_structure_tools_issue_expected_commands(svc: DummyService) -> None:
         "set_species:ATP:{'value': 6.0, 'units': 'molarity'}",
         "delete_species:ATP",
         "add_reaction:rx1:A <-> B; k*A",
-        "set_reaction:rx1:{'reaction': 'B -> C', 'reversible': False, 'rate': 'k2*B'}",
+        "set_reaction:rx1:{'reaction': 'B -> C', 'rate': 'k2*B'}",
         "delete_reaction:rx1",
         "add_parameter:k1:1.5:1/second",
         "set_parameter:k1:{'value': 2.0, 'units': '1/second'}",
         "delete_parameter:k1",
     ]
+    assert svc.autosave_calls == 12
 
 
 def test_create_tools_require_non_blank_units() -> None:
@@ -341,16 +354,31 @@ def test_create_tools_require_non_blank_units() -> None:
         sbio_tools.create_parameter("k1", 1.5, "\t")
 
 
+def test_dose_tools_reject_concentration_units() -> None:
+    with pytest.raises(ValueError, match="amount_units for a dose must be an amount or mass unit"):
+        sbio_tools.create_dose("d1", "drug", amount_units="molarity")
+    with pytest.raises(ValueError, match="rate_units for a dose must be an amount/time or mass/time unit"):
+        sbio_tools.modify_dose("d1", rate_units="molarity/minute")
+
+
+def test_dose_tools_reject_blank_optional_units() -> None:
+    with pytest.raises(ValueError, match="amount_units cannot be blank"):
+        sbio_tools.create_dose("d1", "drug", amount_units="   ")
+    with pytest.raises(ValueError, match="rate_units cannot be blank"):
+        sbio_tools.modify_dose("d1", rate_units="\t")
+
+
 def test_modify_reaction_partial_edit_keeps_stoichiometry(svc: DummyService) -> None:
     # Regression: left/right default to "", so modify_reaction used to always
     # rewrite the equation, wiping the stoichiometry to " -> " when a caller
     # changed only the rate or reversibility.
     assert sbio_tools.modify_reaction("rx1", rate="k*A") == {"name": "rx1", "rate": "k*A"}
-    assert sbio_tools.modify_reaction("rx1", reversible=True) == {"name": "rx1", "reversible": True}
+    assert sbio_tools.modify_reaction("rx1", reversible=True) == {"name": "rx1", "reaction": "A <-> B"}
     assert svc.commands == [
         "set_reaction:rx1:{'rate': 'k*A'}",
-        "set_reaction:rx1:{'reversible': True}",
+        "set_reaction:rx1:{'reaction': 'A <-> B'}",
     ]
+    assert svc.autosave_calls == 2
 
 
 def test_dose_and_variant_tools_issue_expected_commands(svc: DummyService) -> None:
@@ -399,6 +427,7 @@ def test_dose_and_variant_tools_issue_expected_commands(svc: DummyService) -> No
         "set_variant:v1:[{'type': 'parameter', 'name': 'k1', 'property': 'Value', 'value': 0.5}]",
         "delete_variant:v1",
     ]
+    assert svc.autosave_calls == 6
 
 
 def test_modify_variant_rejects_empty_content(svc: DummyService) -> None:
@@ -432,6 +461,7 @@ def test_simulation_and_export_tools(svc: DummyService) -> None:
     assert svc.commands == [
         "set_configset:{'stop_time': 5.0, 'solver_type': 'ode45'}",
     ]
+    assert svc.autosave_calls == 1
 
 
 def test_simulate_model_max_output_length_limits_only_returned_rows() -> None:

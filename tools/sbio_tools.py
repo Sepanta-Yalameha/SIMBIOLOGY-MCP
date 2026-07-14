@@ -11,9 +11,10 @@ from collections.abc import Callable
 from io import StringIO
 import csv
 from pathlib import Path
+import re
 from typing import Any, Literal
 
-from core.sbio_model import SbioModel, build_reaction_equation
+from core.sbio_model import SbioModel, build_reaction_equation, split_reaction_equation
 from core.sbio_service import SbioService
 from tools.registry import register
 
@@ -39,10 +40,15 @@ def _run(command: str) -> None:
     _svc().execute(command)
 
 
+def _autosave() -> None:
+    _svc().autosave_mutation()
+
+
 def _add(model_name: str | None, build: Callable[[SbioModel], str], **echo: Any) -> dict[str, Any]:
     """Run an element-creation command and echo back the created fields."""
 
     _run(build(_model(model_name)))
+    _autosave()
     return echo
 
 
@@ -52,6 +58,7 @@ def _modify(model_name: str | None, kind: str, name: str, **fields: Any) -> dict
     data = {key: value for key, value in fields.items() if value is not None}
     if data:
         _run(getattr(_model(model_name), f"set_{kind}_cmd")(name, **data))
+        _autosave()
     return {"name": name, **data}
 
 
@@ -59,6 +66,7 @@ def _remove(model_name: str | None, kind: str, name: str) -> dict[str, Any]:
     """Delete an element via its ``delete_<kind>_cmd`` builder."""
 
     _run(getattr(_model(model_name), f"delete_{kind}_cmd")(name))
+    _autosave()
     return {"removed": name}
 
 
@@ -69,6 +77,35 @@ def _require_units(units: str) -> str:
     if not text:
         raise ValueError("units is required and cannot be blank.")
     return text
+
+
+_DOSE_AMOUNT_EXAMPLES = "mole, micromole, gram, milligram"
+_DOSE_RATE_EXAMPLES = "mole/hour, micromole/minute, gram/hour, milligram/minute"
+
+
+def _clean_optional_units(field: str, units: str | None) -> str | None:
+    if units is None:
+        return None
+    text = units.strip()
+    if not text:
+        raise ValueError(f"{field} cannot be blank.")
+    return text
+
+
+def _looks_like_concentration_unit(units: str) -> bool:
+    text = re.sub(r"\s+", "", units.casefold())
+    return any(token in text for token in ("molar", "liter", "litre", "/l", "/liter", "/litre"))
+
+
+def _validate_dose_units(amount_units: str | None, rate_units: str | None) -> tuple[str | None, str | None]:
+    amount_units = _clean_optional_units("amount_units", amount_units)
+    rate_units = _clean_optional_units("rate_units", rate_units)
+
+    if amount_units is not None and ("/" in amount_units or _looks_like_concentration_unit(amount_units)):
+        raise ValueError("amount_units for a dose must be an amount or mass unit, not a concentration or rate unit. " f"Examples: {_DOSE_AMOUNT_EXAMPLES}.")
+    if rate_units is not None and _looks_like_concentration_unit(rate_units):
+        raise ValueError("rate_units for a dose must be an amount/time or mass/time unit, not a concentration-based unit. " f"Examples: {_DOSE_RATE_EXAMPLES}.")
+    return amount_units, rate_units
 
 
 def _limit_timecourse_rows(result: dict[str, Any], max_output_length: int | None) -> dict[str, Any]:
@@ -260,11 +297,15 @@ def modify_reaction(
     change just ``reversible`` or ``rate``. The rate stays a raw kinetic
     expression string.
     """
-
     data: dict[str, Any] = {}
+    model = _model(model_name)
     if left or right:
         data["reaction"] = build_reaction_equation(left, right, reversible=bool(reversible))
-    if reversible is not None:
+    elif reversible is not None:
+        current = model.get_reaction(name)["Reaction"]
+        current_left, current_right, _ = split_reaction_equation(current)
+        data["reaction"] = build_reaction_equation(current_left, current_right, reversible=reversible)
+    if reversible is not None and not data.get("reaction"):
         data["reversible"] = reversible
     if rate is not None:
         data["rate"] = rate
@@ -336,6 +377,7 @@ def configure_simulation(
     }
     if fields:
         _run(model.set_configset_cmd(**fields))
+        _autosave()
     return model.get_configset()
 
 
@@ -366,6 +408,7 @@ def create_dose(
     uses the paired lists ``times``, ``amounts``, and ``rates``. Note: a model
     with doses must simulate with an ODE solver (not ssa/expltau/impltau).
     """
+    amount_units, rate_units = _validate_dose_units(amount_units, rate_units)
 
     return _add(
         model_name,
@@ -422,6 +465,7 @@ def modify_dose(
     ``Time``/``Amount``/``Rate`` vectors), remove it and recreate it with
     ``create_dose``.
     """
+    amount_units, rate_units = _validate_dose_units(amount_units, rate_units)
     return _modify(
         model_name,
         "dose",

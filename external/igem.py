@@ -10,13 +10,20 @@ from uuid import UUID
 
 from igem_registry_api import Client, Part, Reference
 
+
+class IgemUnavailableError(RuntimeError):
+    """Raised when the iGEM registry client cannot connect."""
+
 _PART_SLUG_RE = re.compile(r"^(?:bba-[a-z0-9]{1,10}|psb[a-z0-9]{3,5})$")
 
 
 @lru_cache(maxsize=1)
 def _client() -> Client:
     client = Client()
-    client.connect()
+    try:
+        client.connect()
+    except Exception as exc:
+        raise IgemUnavailableError("iGEM tools are currently unavailable because the iGEM API client could not connect. Once the iGEM API issue is fixed, these tools will work normally.") from exc
     return client
 
 
