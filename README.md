@@ -4,7 +4,7 @@
 
 The SimBiology MCP Server is a Model Context Protocol (MCP) interface for MATLAB SimBiology, enabling programmatic control of biological modeling and simulation workflows from AI agents and external tools.
 
-It bridges large language model systems with MATLAB’s SimBiology toolbox through the MATLAB Engine for Python, allowing automated creation, modification, and execution of computational biology models.
+It bridges large language model systems with MATLAB's SimBiology toolbox through the MATLAB Engine for Python, allowing automated creation, modification, and execution of computational biology models.
 
 ---
 
@@ -18,59 +18,69 @@ This MCP server provides a structured programmatic layer that:
 - Enables automated model construction and simulation
 - Supports agent-driven workflows for systems biology
 - Removes the need for manual MATLAB interaction
+- Supports workflows such as building PK/PD models, modifying reactions and parameters, simulating time courses, exporting results, and pulling supporting context from PubMed and iGEM
 
 ---
 
-## Architecture
+## Installation
 
-The system is divided into two layers:
+Three installation paths are supported.
 
-### Setup Layer (Environment Bootstrap)
+### 1. Manual repo checkout
 
-A PowerShell-based setup script that:
+Use this when you want the full source tree locally, including the repo skill files and tests.
 
-- Detects installed MATLAB versions via Windows registry
-- Allows selection of MATLAB release
-- Detects available Python interpreters
-- Creates an isolated Python virtual environment
-- Installs MATLAB Engine for Python using a stable legacy installation method
-- Validates environment readiness
+```powershell
+git clone https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP.git
+cd SIMBIOLOGY-MCP
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+simbiology-mcp setup
+```
 
-This layer is executed once per machine setup.
+Then point your MCP client at the repo entry point:
 
----
+```json
+{
+  "mcpServers": {
+    "simbiology": {
+      "command": "C:/path/to/SIMBIOLOGY-MCP/.venv/Scripts/python.exe",
+      "args": ["C:/path/to/SIMBIOLOGY-MCP/main.py"]
+    }
+  }
+}
+```
 
-### Runtime Layer (MCP Server)
+### 2. Recommended: `uv tool install`
 
-A Python-based MCP server that:
+Use this when you want a cleaner install without cloning the repo.
 
-- Connects to MATLAB via the MATLAB Engine API
-- Maintains a persistent MATLAB session
-- Exposes SimBiology operations as MCP tools
-- Executes simulations and returns structured outputs
-- Supports iterative model modification workflows
+```powershell
+uv tool install simbiology-mcp
+simbiology-mcp setup
+```
 
----
+Then point your MCP client at the installed `simbiology-mcp` command with the `start` subcommand. To get the packaged skill guidance, run:
 
-## Features
+```powershell
+simbiology-mcp get-skill
+```
 
-- Programmatic creation of SimBiology models
-- Reaction and species management
-- Parameter configuration and updates
-- Simulation execution through MATLAB Engine
-- Retrieval of simulation results
-- MCP-compatible tool interface for LLM integration
-- Persistent MATLAB session management
+That helper prints the packaged `SKILL.md` to the terminal by default. To copy it to a specific location instead, pass an explicit destination:
 
----
+```powershell
+simbiology-mcp get-skill --install-path C:\path\to\SKILL.md
+```
 
-## Example Use Cases
+### 3. Plain `pip`
 
-- Construct pharmacokinetic (PK/PD) models from natural language descriptions
-- Simulate drug concentration over time
-- Modify reaction rates and rerun simulations
-- Build multi-compartment biological systems
-- Automate sensitivity analysis workflows
+Use this if you do not want `uv tool install`.
+
+```powershell
+python -m pip install simbiology-mcp
+simbiology-mcp setup
+simbiology-mcp get-skill
+```
 
 ---
 
@@ -84,104 +94,66 @@ A Python-based MCP server that:
 
 ---
 
-## Installation
-
-Run the setup script from the project root. It detects your MATLAB and Python
-installs, creates a `.venv`, installs the pinned dependencies from
-`requirements.txt`, and installs the MATLAB Engine for Python that matches your
-MATLAB release:
-
-```powershell
-.\setup_venv.ps1
-```
-
-To skip the interactive prompts, pass explicit indices or paths:
-
-```powershell
-.\setup_venv.ps1 -MatlabIndex 0 -PythonIndex 0
-```
-
-### Installing the server as a package (optional)
-
-The project ships a `pyproject.toml`, so once the venv exists you can install the
-server itself as an editable package. This puts its packages on the import path
-(no need to set `PYTHONPATH`) and registers a `simbiology-mcp` command:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e .
-```
-
----
-
 ## Usage
 
-Start the server over stdio, either through the repo entry point or the installed
-command:
+Start the server over stdio, either through the repo entry point or the installed command:
 
 ```powershell
-# from the repo, with the packages importable
-$env:PYTHONPATH = (Get-Location).Path
+# from the repo
 .\.venv\Scripts\python.exe .\main.py
 
-# or, after `pip install -e .`
-simbiology-mcp
+# or, after installation
+simbiology-mcp start
 ```
 
 ### Wiring into an MCP client
 
-Point your MCP client at the server command. A typical stdio configuration:
+Point your MCP client at the server command. A typical stdio configuration for an installed command:
 
 ```json
 {
   "mcpServers": {
     "simbiology": {
-      "command": "C:/path/to/SIMBIOLOGY-MCP/.venv/Scripts/python.exe",
-      "args": ["C:/path/to/SIMBIOLOGY-MCP/main.py"],
-      "env": { "PYTHONPATH": "C:/path/to/SIMBIOLOGY-MCP" }
+      "command": "simbiology-mcp",
+      "args": ["start"]
     }
   }
 }
 ```
 
-The MATLAB engine starts lazily on the first tool call that needs it, so client
-startup stays fast.
+The MATLAB engine starts lazily on the first tool call that needs it, so client startup stays fast.
 
 ### External API keys
 
-PubMed works without a key but is rate-limited. To raise the limit, copy
-`.env.example` to `.env` and set `NCBI_API_KEY`.
+PubMed works without a key but is rate-limited. To raise the limit, copy `.env.example` to `.env` and set `NCBI_API_KEY`.
 
 ---
 
 ## Tools
 
-The server exposes its capabilities as MCP tools, grouped by area:
+The server exposes the following MCP tools:
 
-- **Projects:** `load_project`, `create_project`, `save_project`
-- **Models:** `create_model`, `rename_model`, `remove_model`, `list_models`
-- **Model elements:** `create_*`, `modify_*`, `remove_*`, and `list_*` for
-  compartments, species, reactions, and parameters
-- **Simulation:** `get_simulation_settings`, `configure_simulation`,
-  `simulate_model` (optionally applying named `doses`/`variants` for the run)
-- **Dosing:** `create_dose`, `modify_dose`, `list_doses`, `remove_dose`
-  (repeat and schedule doses; bolus or zero-order infusion)
-- **Variants:** `create_variant`, `modify_variant`, `list_variants`,
-  `remove_variant` (named parameter/species/compartment overrides, e.g. knockouts)
-- **Export:** `export_graph` (PNG plot of a simulation) and `export_csv`
-  (simulation time-course as CSV written to a file at the required `path`);
-  both accept the same `doses`, `variants`, and `species`
-  arguments as `simulate_model`, so exports reflect that exact run
-- **Analysis:** `list_series`, `steady_state`, `series_min`, `series_max`
-  (read exported CSV files to inspect available series and basic endpoint/range
-  values without re-running MATLAB)
-- **Literature and parts:** `pubmed_search`, `pubmed_summary`, `pubmed_article`,
-  `igem_part`, `igem_search`, `igem_search_best`
+| Tool name | Description | Inputs | Outputs |
+| --- | --- | --- | --- |
+| `load_project`, `create_project`, `save_project` | Load, create, and persist SimBiology projects. | Project path, model name, save target. | Confirmation plus project/model metadata. |
+| `create_model`, `rename_model`, `remove_model`, `list_models` | Manage models inside the loaded project. | Model name or rename target. | Confirmation or model name lists. |
+| `create_compartment`, `modify_compartment`, `remove_compartment`, `list_compartments` | Manage compartments. | Names plus compartment properties such as capacity and units. | Confirmation or compartment data. |
+| `create_species`, `modify_species`, `remove_species`, `list_species` | Manage species. | Names plus species properties such as initial amount and units. | Confirmation or species data. |
+| `create_reaction`, `modify_reaction`, `remove_reaction`, `list_reactions` | Manage reactions and rate expressions. | Reactants, products, reversibility, rate law fields. | Confirmation or reaction data. |
+| `create_parameter`, `modify_parameter`, `remove_parameter`, `list_parameters` | Manage model parameters. | Names, values, units, and scope. | Confirmation or parameter data. |
+| `get_simulation_settings`, `configure_simulation`, `simulate_model` | Inspect, configure, and run simulations. | Solver/settings fields, optional `species`, `doses`, `variants`, and output limits. | Current settings or simulation result rows. |
+| `create_dose`, `modify_dose`, `remove_dose`, `list_doses` | Manage repeat and schedule doses. | Dose type, target, timing, amount/rate fields. Dose amounts use amount/mass units; dose rates use amount/time or mass/time units. | Confirmation or dose data. |
+| `create_variant`, `modify_variant`, `remove_variant`, `list_variants` | Manage named model overrides. | Variant name and full content entries. | Confirmation or variant data. |
+| `export_graph`, `export_csv` | Export the same run used by `simulate_model` to PNG or CSV. | Optional path plus optional `species`, `doses`, and `variants`. | File metadata or inline CSV text. |
+| `list_series`, `steady_state`, `series_min`, `series_max` | Analyze exported CSV data without rerunning MATLAB. | CSV path and target series name. | Series names or computed values. |
+| `pubmed_search`, `pubmed_summary`, `pubmed_article` | Pull literature context from PubMed. | Query, PubMed ID, and summary options. | Search hits, article details, or summaries. |
+| `igem_part`, `igem_search`, `igem_search_best` | Look up parts from the iGEM registry. | Exact identifier or free-text query. | Part records or ranked matches. |
 
 ---
 
 ## Project layout
 
-```
+```text
 core/        SimBiology session, per-model reads, and command builders
 engine/      Singleton MATLAB engine wrapper and error types
 tools/       MCP tool definitions and the shared registry
@@ -198,13 +170,7 @@ tests/       Unit tests plus MATLAB/live integration tests
 Run the hermetic test suite (no MATLAB or network required):
 
 ```powershell
-$env:PYTHONPATH = (Get-Location).Path
-.\.venv\Scripts\python.exe -m pytest -m "not matlab and not live"
+py -m pytest -m "not matlab and not live"
 ```
 
-Integration tests are opt-in:
-
-- `matlab`-marked tests run automatically when the MATLAB Engine is importable.
-- `live`-marked tests hit external APIs and run only with `--run-live`.
-
-CI runs the hermetic subset on every push and pull request.
+`matlab` tests require a working MATLAB Engine install. `live` tests hit external APIs and run only with `--run-live`.

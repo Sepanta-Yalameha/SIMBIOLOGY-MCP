@@ -22,16 +22,25 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["coverage>=7", "pytest>=8"]
 # 'matlab' pulls matlabengine from PyPI, whose version must match your installed
 # MATLAB release. On Windows, setup_venv.ps1 installs it straight from your local
 # MATLAB instead; prefer that unless you know the PyPI version lines up.
 matlab = ["matlabengine"]
 
 [project.scripts]
-simbiology-mcp = "interfaces.mcp_server:run"
-simbiology-mcp-setup = "scripts.setup:main"
+simbiology-mcp = "interfaces.cli:main"
 
 [tool.setuptools]
 # Flat layout: the server's top-level packages, listed explicitly.
-packages = ["core", "engine", "external", "interfaces", "scripts", "tools"]
+packages = ["core", "engine", "external", "interfaces", "scripts", "skills", "tools"]
+
+[tool.setuptools.package-data]
+skills = ["SKILL.md"]
+
+[tool.coverage.run]
+source = ["core", "engine", "external", "interfaces", "scripts", "skills", "tools"]
+
+[tool.black]
+line-length = 200
+target-version = ["py312"]

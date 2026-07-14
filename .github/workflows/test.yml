@@ -8,24 +8,33 @@ on:
 
 jobs:
   test:
-    runs-on: windows-latest
-
-    env:
-      PYTHONPATH: ${{ github.workspace }}
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install project (with dev deps)
+      - name: Sync dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          uv sync --extra dev
 
       - name: Run tests
-        run: python -m pytest -q -m "not matlab and not live"
+        run: |
+          uv run coverage run -m pytest -v -m "not matlab and not live"
+          uv run coverage report --show-missing
+          uv run coverage html
+
+      - name: Upload coverage HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov/
