@@ -24,8 +24,8 @@ def test_build_server_adds_all_tools(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_run_exits_cleanly_when_matlab_engine_missing(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-    monkeypatch.delitem(sys.modules, "matlab", raising=False)
-    monkeypatch.delitem(sys.modules, "matlab.engine", raising=False)
+    monkeypatch.setitem(sys.modules, "matlab", None)
+    monkeypatch.setitem(sys.modules, "matlab.engine", None)
 
     with pytest.raises(SystemExit, match="1"):
         mcp_server.run()
