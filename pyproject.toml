@@ -13,7 +13,7 @@ authors = [{ name = "Yojith Sai Biradavolu", email = "yojith23@gmail.com" },
 keywords = ["mcp", "simbiology", "matlab", "systems-biology", "pk-pd", "modeling"]
 
 # Direct runtime dependencies only. The fully pinned transitive closure lives in
-# requirements.txt, which setup_venv.ps1 uses to build a reproducible venv.
+# uv.lock.
 dependencies = [
     "fastmcp>=3.4,<4",
     "httpx>=0.28",
@@ -24,8 +24,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["coverage>=7", "pytest>=8"]
 # 'matlab' pulls matlabengine from PyPI, whose version must match your installed
-# MATLAB release. On Windows, setup_venv.ps1 installs it straight from your local
-# MATLAB instead; prefer that unless you know the PyPI version lines up.
+# MATLAB release. scripts/setup.py installs it straight from your local MATLAB
+# instead; prefer that unless you know the PyPI version lines up.
 matlab = ["matlabengine"]
 
 [project.scripts]
