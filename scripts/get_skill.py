@@ -199,8 +199,8 @@ def interactive_install(*, scope: str = "user", fallback: str = "print") -> None
 
     With no interactive terminal, `fallback` decides what happens: `"print"`
     prints SKILL.md (so `get-skill` stays pipeable), `"hint"` prints a short note
-    on how to install non-interactively, and `"default"` installs for Claude Code
-    (used when install was explicitly requested but no agent could be chosen).
+    on how to install non-interactively, and `"error"` exits asking for --client
+    (used when install was requested but no agent could be chosen).
     """
 
     if not _is_interactive():
@@ -209,8 +209,8 @@ def interactive_install(*, scope: str = "user", fallback: str = "print") -> None
                 "Skill not installed: no interactive terminal detected. Install it with " "`simbiology-mcp get-skill --install --client <claude-code|cursor|codex|windsurf|copilot>`.",
                 file=sys.stderr,
             )
-        elif fallback == "default":
-            _install_for_client("claude-code", scope)
+        elif fallback == "error":
+            raise SystemExit("No interactive terminal to choose an agent. Re-run with --client <claude-code|cursor|codex|windsurf|copilot>.")
         else:
             print(_skill_text())
         return
@@ -249,9 +249,9 @@ def main(argv: list[str] | None = None) -> None:
         if args.client is not None:
             _install_for_client(args.client, scope_name)
         else:
-            # No agent named: choose from the menu (or default to Claude Code
-            # when there is no interactive terminal), keeping the chosen scope.
-            interactive_install(scope=scope_name, fallback="default")
+            # No agent named: choose from the menu, keeping the chosen scope.
+            # With no interactive terminal there is nothing to prompt, so error.
+            interactive_install(scope=scope_name, fallback="error")
     elif not args.print_skill:
         interactive_install(scope="user", fallback="print")
 

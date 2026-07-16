@@ -160,15 +160,17 @@ def test_get_skill_install_without_client_prompts_when_interactive(monkeypatch, 
     assert (tmp_path / ".agents" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
 
 
-def test_get_skill_install_without_client_defaults_when_not_interactive(monkeypatch, tmp_path: Path) -> None:
-    # Without a terminal to prompt in, --install with no --client falls back to Claude Code.
+def test_get_skill_install_without_client_errors_when_not_interactive(monkeypatch, tmp_path: Path) -> None:
+    # Without a terminal to prompt in, --install with no --client errors instead
+    # of silently choosing an agent.
     monkeypatch.setattr(get_skill, "_is_interactive", lambda: False)
     monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install"])
 
-    get_skill.main()
+    with pytest.raises(SystemExit):
+        get_skill.main()
 
-    assert (tmp_path / ".claude" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
+    assert not (tmp_path / ".claude").exists()
 
 
 def test_get_skill_install_rejects_unknown_client(monkeypatch) -> None:
