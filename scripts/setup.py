@@ -58,13 +58,14 @@ def select_matlab_root(root_arg, index_arg):
     installs = find_matlab_installs()
     if not installs:
         sys.exit("No MATLAB installation found. Pass --matlab-root explicitly.")
-    if len(installs) == 1:
-        return installs[0][1]
 
     if index_arg is not None:
         if not 0 <= index_arg < len(installs):
             sys.exit(f"--matlab-index {index_arg} is out of range ({len(installs)} installations found).")
         return installs[index_arg][1]
+
+    if len(installs) == 1:
+        return installs[0][1]
 
     from scripts import tui
 

@@ -108,7 +108,7 @@ def _select_client(*, read_key=None, stream=None) -> str | None:
 
     labels = [_CLIENT_LABELS[k] for k in _CLIENT_ORDER]
     title = "Install the SimBiology skill for which agent?  (up/down to move, Enter to select, q to cancel)"
-    choice = tui.select(title, labels, read_key=read_key or tui.read_key, stream=stream)
+    choice = tui.select(title, labels, read_key=read_key, stream=stream)
     return None if choice is None else _CLIENT_ORDER[choice]
 
 

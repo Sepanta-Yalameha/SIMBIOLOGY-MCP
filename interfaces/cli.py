@@ -15,8 +15,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     get_skill_parser = subparsers.add_parser("get-skill", help="Install or print the packaged skill (interactive picker with no flags).")
     get_skill_parser.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")
-    get_skill_parser.add_argument("--install", action="store_true", help="Install SKILL.md into the target client's skills directory (no prompt).")
-    get_skill_parser.add_argument("--client", help="Client to install for when using --install (default: claude-code).")
+    get_skill_parser.add_argument("--install", action="store_true", help="Install SKILL.md into a client's skills directory (pass --client to skip the picker).")
+    get_skill_parser.add_argument("--client", choices=sorted(get_skill._CLIENT_SKILL_DIRS), help="Client to install for. Omit with --install to pick from the interactive menu.")
     get_skill_scope = get_skill_parser.add_mutually_exclusive_group()
     get_skill_scope.add_argument("--user", action="store_true", help="Install into the user-level skills directory (default).")
     get_skill_scope.add_argument("--project", action="store_true", help="Install into the current project's skills directory.")

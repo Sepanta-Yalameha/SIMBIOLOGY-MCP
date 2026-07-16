@@ -68,13 +68,13 @@ Then point your MCP client at the installed `simbiology-mcp` command with the `s
 simbiology-mcp get-skill
 ```
 
-To skip the menu, install non-interactively (the target directory is created if missing):
+To skip the menu, name the agent (the target directory is created if missing):
 
 ```powershell
-simbiology-mcp get-skill --install                        # Claude Code, user scope (~/.claude/skills/...)
-simbiology-mcp get-skill --install --client cursor --project
-simbiology-mcp get-skill --install-path C:\path\to\SKILL.md
-simbiology-mcp get-skill --print                          # print SKILL.md to stdout instead
+simbiology-mcp get-skill --install --client claude-code       # ~/.claude/skills/...
+simbiology-mcp get-skill --install --client cursor --project  # ./.cursor/skills/...
+simbiology-mcp get-skill --install-path C:\path\to\SKILL.md   # exact path
+simbiology-mcp get-skill --print                              # print SKILL.md to stdout instead
 ```
 
 ### 3. Plain `pip`

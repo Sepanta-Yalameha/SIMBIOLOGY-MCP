@@ -26,8 +26,11 @@ def enable_windows_ansi() -> None:
         import ctypes
 
         kernel32 = ctypes.windll.kernel32
-        # STD_OUTPUT_HANDLE = -11; mode 7 enables virtual-terminal processing.
-        kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            # Add ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4) without dropping other bits.
+            kernel32.SetConsoleMode(handle, mode.value | 0x0004)
     except Exception:
         pass
 
@@ -56,10 +59,12 @@ def read_key() -> str:
     try:
         tty.setcbreak(fd)
         ch = sys.stdin.read(1)
+        if ch == "":  # EOF (stdin closed): treat as cancel so callers don't spin.
+            return "cancel"
         if ch == "\x1b":
             # Peek for an arrow escape sequence without blocking on a bare Esc.
-            if select.select([sys.stdin], [], [], 0.01)[0]:
-                if sys.stdin.read(1) == "[" and select.select([sys.stdin], [], [], 0.01)[0]:
+            if select.select([sys.stdin], [], [], 0.05)[0]:
+                if sys.stdin.read(1) == "[" and select.select([sys.stdin], [], [], 0.05)[0]:
                     return {"A": "up", "B": "down"}.get(sys.stdin.read(1), "")
             return "cancel"
         if ch in ("\r", "\n"):
@@ -72,23 +77,31 @@ def read_key() -> str:
 
 
 def _render(title: str, options: list[str], index: int, stream) -> None:
-    lines = [title]
+    import shutil
+
+    # Keep every line within one terminal row so the in-place redraw math
+    # (one row per option) stays correct even with long option text.
+    width = shutil.get_terminal_size((80, 24)).columns
+    lines = [title[: width - 1]]
     for i, option in enumerate(options):
         pointer = ">" if i == index else " "
-        lines.append(f" {pointer} {option}")
+        lines.append(f" {pointer} {option}"[: width - 1])
     stream.write("\n".join(lines) + "\n")
     stream.flush()
 
 
-def select(title: str, options: list[str], *, read_key=read_key, stream=None) -> int | None:
+def select(title: str, options: list[str], *, read_key=None, stream=None) -> int | None:
     """Show an arrow-key menu; return the chosen index or None if cancelled."""
 
+    if not options:
+        return None
+    reader = read_key if read_key is not None else globals()["read_key"]
     stream = stream or sys.stdout
     index = 0
     _render(title, options, index, stream)
     height = len(options) + 1
     while True:
-        key = read_key()
+        key = reader()
         if key == "up":
             index = (index - 1) % len(options)
         elif key == "down":

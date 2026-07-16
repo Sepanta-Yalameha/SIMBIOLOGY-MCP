@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -146,6 +147,19 @@ def test_get_skill_install_project_scope(monkeypatch, tmp_path: Path) -> None:
     get_skill.main()
 
     assert (tmp_path / ".cursor" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
+
+
+def test_get_skill_print_and_install_together(monkeypatch, capsys, tmp_path: Path) -> None:
+    monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--print", "--install", "--client", "claude-code"])
+
+    get_skill.main()
+
+    out = capsys.readouterr().out
+    target = tmp_path / ".claude" / "skills" / "simbiology-workflow" / "SKILL.md"
+    assert get_skill._skill_text() in out
+    assert f"Installed Claude Code skill to {target.resolve()}" in out
+    assert target.exists()
 
 
 def test_get_skill_install_without_client_prompts_when_interactive(monkeypatch, tmp_path: Path) -> None:
@@ -297,6 +311,16 @@ def test_cli_get_skill_bare_forwards_no_flags(monkeypatch) -> None:
     assert captured == [[]]
 
 
+def test_cli_get_skill_forwards_user_scope(monkeypatch) -> None:
+    captured: list[list[str]] = []
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill", "--install", "--user"])
+    monkeypatch.setattr(get_skill, "main", lambda argv=None: captured.append(argv or []))
+
+    cli.main()
+
+    assert captured == [["--install", "--user"]]
+
+
 def test_cli_setup_dispatches(monkeypatch) -> None:
     called: list[list[str]] = []
     monkeypatch.setattr("sys.argv", ["simbiology-mcp", "setup", "--matlab-index", "1"])
@@ -319,6 +343,26 @@ def test_tui_select_cancel_returns_none() -> None:
     import io
 
     assert tui.select("pick", ["a", "b"], read_key=_fake_keys(["cancel"]), stream=io.StringIO()) is None
+
+
+def test_tui_select_empty_returns_none() -> None:
+    import io
+
+    assert tui.select("nothing", [], stream=io.StringIO()) is None
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows key decoding")
+def test_read_key_windows_decodes_keys(monkeypatch) -> None:
+    import msvcrt
+
+    monkeypatch.setattr(msvcrt, "getwch", _fake_keys(["\xe0", "H"]))
+    assert tui.read_key() == "up"
+    monkeypatch.setattr(msvcrt, "getwch", _fake_keys(["\xe0", "P"]))
+    assert tui.read_key() == "down"
+    monkeypatch.setattr(msvcrt, "getwch", _fake_keys(["\r"]))
+    assert tui.read_key() == "enter"
+    monkeypatch.setattr(msvcrt, "getwch", _fake_keys(["q"]))
+    assert tui.read_key() == "cancel"
 
 
 def test_select_matlab_root_interactive_menu(monkeypatch) -> None:
