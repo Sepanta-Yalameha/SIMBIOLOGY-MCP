@@ -67,18 +67,25 @@ def test_add_parameter_cmd_with_units(model):
 
 
 def test_add_reaction_cmd_without_rate(model):
-    assert model.add_reaction_cmd("rx", "a -> b") == ("rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); try, rxnObj.Reaction.Text.Location = 'top'; catch, end;")
+    assert model.add_reaction_cmd("rx", "a -> b") == (
+        "rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); "
+        "try, simbio.diagram.setBlock(rxnObj, 'TextLocation', 'top'); catch ME, warning('%s', ME.message); end;"
+    )
 
 
 def test_add_reaction_cmd_with_rate(model):
     assert model.add_reaction_cmd("rx", "a -> b; k * a") == (
-        "rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); try, rxnObj.Reaction.Text.Location = 'top'; catch, end; " "rxnObj.ReactionRate = 'k * a';"
+        "rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); "
+        "try, simbio.diagram.setBlock(rxnObj, 'TextLocation', 'top'); catch ME, warning('%s', ME.message); end; "
+        "rxnObj.ReactionRate = 'k * a';"
     )
 
 
 def test_add_reaction_cmd_with_numeric_rate(model):
     assert model.add_reaction_cmd("rx", "a -> b; 1") == (
-        "rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); try, rxnObj.Reaction.Text.Location = 'top'; catch, end; " "rxnObj.ReactionRate = 1.0;"
+        "rxnObj = addreaction(m,'a -> b'); set(rxnObj,'Name','rx'); "
+        "try, simbio.diagram.setBlock(rxnObj, 'TextLocation', 'top'); catch ME, warning('%s', ME.message); end; "
+        "rxnObj.ReactionRate = 1.0;"
     )
 
 
