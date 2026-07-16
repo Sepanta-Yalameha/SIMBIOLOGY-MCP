@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Support for constructing and modifying biological models.
 * Support for running model simulations.
 * Support for exporting and analyzing simulation data.
+* Added basic CLI functionality for setting up and starting the MCP server, and for installing the skill.
 
 [unreleased]: https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/releases/tag/v0.1.0
