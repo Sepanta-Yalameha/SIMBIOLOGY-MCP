@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from interfaces import cli
-from scripts import get_skill, setup
+from scripts import get_skill, setup, tui
 
 
 def test_skill_path_uses_packaged_copy(monkeypatch, tmp_path: Path) -> None:
@@ -112,7 +112,8 @@ def test_client_target_resolves_per_client_and_scope(monkeypatch, tmp_path: Path
         ("claude-code", "user"): ".claude/skills",
         ("claude-code", "project"): ".claude/skills",
         ("cursor", "user"): ".cursor/skills",
-        ("codex", "user"): ".agents/skills",
+        ("codex", "user"): ".codex/skills",
+        ("codex", "project"): ".agents/skills",
         ("windsurf", "user"): ".codeium/windsurf/skills",
         ("copilot", "user"): ".copilot/skills",
         ("copilot", "project"): ".github/skills",
@@ -304,6 +305,46 @@ def test_cli_setup_dispatches(monkeypatch) -> None:
     cli.main()
 
     assert called == [["--matlab-index", "1"]]
+
+
+def test_tui_select_navigates_and_returns_index() -> None:
+    import io
+
+    idx = tui.select("pick", ["a", "b", "c"], read_key=_fake_keys(["down", "down", "enter"]), stream=io.StringIO())
+
+    assert idx == 2
+
+
+def test_tui_select_cancel_returns_none() -> None:
+    import io
+
+    assert tui.select("pick", ["a", "b"], read_key=_fake_keys(["cancel"]), stream=io.StringIO()) is None
+
+
+def test_select_matlab_root_interactive_menu(monkeypatch) -> None:
+    installs = [("R2025a", Path("C:/MATLAB/R2025a")), ("R2024b", Path("C:/MATLAB/R2024b"))]
+    monkeypatch.setattr(setup, "find_matlab_installs", lambda: installs)
+    monkeypatch.setattr(tui, "is_interactive", lambda: True)
+    monkeypatch.setattr(tui, "enable_windows_ansi", lambda: None)
+    monkeypatch.setattr(tui, "select", lambda *args, **kwargs: 1)
+
+    assert setup.select_matlab_root(None, None) == Path("C:/MATLAB/R2024b")
+
+
+def test_select_matlab_root_errors_non_interactive_with_multiple(monkeypatch) -> None:
+    installs = [("R2025a", Path("C:/MATLAB/R2025a")), ("R2024b", Path("C:/MATLAB/R2024b"))]
+    monkeypatch.setattr(setup, "find_matlab_installs", lambda: installs)
+    monkeypatch.setattr(tui, "is_interactive", lambda: False)
+
+    with pytest.raises(SystemExit, match="--matlab-index"):
+        setup.select_matlab_root(None, None)
+
+
+def test_select_matlab_root_rejects_out_of_range_index(monkeypatch) -> None:
+    monkeypatch.setattr(setup, "find_matlab_installs", lambda: [("R2025a", Path("C:/MATLAB/R2025a")), ("R2024b", Path("C:/MATLAB/R2024b"))])
+
+    with pytest.raises(SystemExit, match="out of range"):
+        setup.select_matlab_root(None, 5)
 
 
 def test_select_matlab_root_prefers_explicit_root() -> None:

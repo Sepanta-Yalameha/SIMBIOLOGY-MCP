@@ -61,10 +61,23 @@ def select_matlab_root(root_arg, index_arg):
     if len(installs) == 1:
         return installs[0][1]
 
-    for i, (version, root) in enumerate(installs):
-        print(f"[{i}] {version} -> {root}")
-    idx = index_arg if index_arg is not None else int(input("Select index: "))
-    return installs[idx][1]
+    if index_arg is not None:
+        if not 0 <= index_arg < len(installs):
+            sys.exit(f"--matlab-index {index_arg} is out of range ({len(installs)} installations found).")
+        return installs[index_arg][1]
+
+    from scripts import tui
+
+    if not tui.is_interactive():
+        listing = "\n".join(f"  [{i}] {version} -> {root}" for i, (version, root) in enumerate(installs))
+        sys.exit(f"Multiple MATLAB installations found. Re-run with --matlab-index N:\n{listing}")
+
+    tui.enable_windows_ansi()
+    options = [f"{version}   ({root})" for version, root in installs]
+    choice = tui.select("Select your MATLAB installation  (up/down to move, Enter to select, q to cancel)", options)
+    if choice is None:
+        sys.exit("No MATLAB installation selected.")
+    return installs[choice][1]
 
 
 def main(argv: list[str] | None = None):

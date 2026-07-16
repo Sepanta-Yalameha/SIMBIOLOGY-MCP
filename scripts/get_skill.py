@@ -13,19 +13,20 @@ import argparse
 import sys
 from pathlib import Path
 
+from scripts import tui
+
 # Directory name the skill is installed under. Matches the `name` in SKILL.md's
 # frontmatter so the folder and the agent's skill invocation stay consistent.
 SKILL_DIR_NAME = "simbiology-workflow"
 
 # Where each client auto-discovers skills, per scope. The user-scope path is
 # resolved against the home directory and the project-scope path against the
-# current working directory. Paths verified against each client's official docs
-# (Jul 2026). Codex uses the current-official `~/.agents/skills` (its legacy
-# `~/.codex/skills` still works but is deprecated).
+# current working directory. Paths verified against each client's docs (Jul 2026);
+# Codex reads `~/.codex/skills` at user scope and `.agents/skills` in a repo.
 _CLIENT_SKILL_DIRS: dict[str, dict[str, Path]] = {
     "claude-code": {"user": Path(".claude") / "skills", "project": Path(".claude") / "skills"},
     "cursor": {"user": Path(".cursor") / "skills", "project": Path(".cursor") / "skills"},
-    "codex": {"user": Path(".agents") / "skills", "project": Path(".agents") / "skills"},
+    "codex": {"user": Path(".codex") / "skills", "project": Path(".agents") / "skills"},
     "windsurf": {"user": Path(".codeium") / "windsurf" / "skills", "project": Path(".windsurf") / "skills"},
     "copilot": {"user": Path(".copilot") / "skills", "project": Path(".github") / "skills"},
 }
@@ -95,98 +96,20 @@ def _write_skill(path: Path) -> tuple[Path, Path]:
 
 
 def _is_interactive() -> bool:
-    try:
-        return sys.stdin.isatty() and sys.stdout.isatty()
-    except (AttributeError, ValueError):
-        return False
+    return tui.is_interactive()
 
 
 def _enable_windows_ansi() -> None:
-    """Best-effort enable of ANSI escape handling on Windows consoles."""
-
-    if sys.platform != "win32":
-        return
-    try:
-        import ctypes
-
-        kernel32 = ctypes.windll.kernel32
-        # STD_OUTPUT_HANDLE = -11; mode 7 enables virtual-terminal processing.
-        kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-    except Exception:
-        pass
+    tui.enable_windows_ansi()
 
 
-def _read_key() -> str:
-    """Read one keypress and normalize it to up/down/enter/cancel/'' (other)."""
+def _select_client(*, read_key=None, stream=None) -> str | None:
+    """Show the arrow-key agent menu; return the chosen client key or None."""
 
-    if sys.platform == "win32":
-        import msvcrt
-
-        ch = msvcrt.getwch()
-        if ch in ("\x00", "\xe0"):
-            return {"H": "up", "P": "down"}.get(msvcrt.getwch(), "")
-        if ch in ("\r", "\n"):
-            return "enter"
-        if ch in ("\x1b", "q", "Q", "\x03"):
-            return "cancel"
-        return ""
-
-    import select
-    import termios
-    import tty
-
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
-    try:
-        tty.setcbreak(fd)
-        ch = sys.stdin.read(1)
-        if ch == "\x1b":
-            # Peek for an arrow escape sequence without blocking on a bare Esc.
-            if select.select([sys.stdin], [], [], 0.01)[0]:
-                if sys.stdin.read(1) == "[" and select.select([sys.stdin], [], [], 0.01)[0]:
-                    return {"A": "up", "B": "down"}.get(sys.stdin.read(1), "")
-            return "cancel"
-        if ch in ("\r", "\n"):
-            return "enter"
-        if ch in ("q", "Q", "\x03"):
-            return "cancel"
-        return ""
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
-
-
-def _render_menu(title: str, labels: list[str], index: int, stream) -> None:
-    lines = [title]
-    for i, label in enumerate(labels):
-        pointer = ">" if i == index else " "
-        lines.append(f" {pointer} {label}")
-    stream.write("\n".join(lines) + "\n")
-    stream.flush()
-
-
-def _select_client(*, read_key=_read_key, stream=None) -> str | None:
-    """Show an arrow-key menu of clients; return the chosen key or None."""
-
-    stream = stream or sys.stdout
     labels = [_CLIENT_LABELS[k] for k in _CLIENT_ORDER]
     title = "Install the SimBiology skill for which agent?  (up/down to move, Enter to select, q to cancel)"
-    index = 0
-    _render_menu(title, labels, index, stream)
-    height = len(labels) + 1
-    while True:
-        key = read_key()
-        if key == "up":
-            index = (index - 1) % len(_CLIENT_ORDER)
-        elif key == "down":
-            index = (index + 1) % len(_CLIENT_ORDER)
-        elif key == "enter":
-            return _CLIENT_ORDER[index]
-        elif key == "cancel":
-            return None
-        else:
-            continue
-        stream.write(f"\x1b[{height}A")  # move cursor back up to redraw in place
-        _render_menu(title, labels, index, stream)
+    choice = tui.select(title, labels, read_key=read_key or tui.read_key, stream=stream)
+    return None if choice is None else _CLIENT_ORDER[choice]
 
 
 def _install_for_client(client: str, scope: str) -> None:
