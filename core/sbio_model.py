@@ -73,7 +73,7 @@ def _format_reaction_rate(rate: str) -> str:
 def _reaction_label_cmd(obj: str = "rxnObj") -> str:
     """Best-effort diagram label placement for newly created reactions."""
 
-    return f"try, {obj}.Reaction.Text.Location = 'top'; catch, end;"
+    return f"try, simbio.diagram.setBlock({obj}, 'TextLocation', 'top'); catch ME, warning('%s', ME.message); end;"
 
 
 def _finite_or_none(value: Any) -> Any:
