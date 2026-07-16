@@ -8,6 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from . import configure_mcp, tui
+
 
 def find_matlab_installs_windows():
     import winreg
@@ -67,8 +69,6 @@ def select_matlab_root(root_arg, index_arg):
     if len(installs) == 1:
         return installs[0][1]
 
-    from . import tui
-
     if not tui.is_interactive():
         listing = "\n".join(f"  [{i}] {version} -> {root}" for i, (version, root) in enumerate(installs))
         sys.exit(f"Multiple MATLAB installations found. Re-run with --matlab-index N:\n{listing}")
@@ -85,7 +85,17 @@ def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--matlab-root")
     parser.add_argument("--matlab-index", type=int)
+    parser.add_argument("--client", choices=configure_mcp.client_names())
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--user", action="store_true")
+    scope.add_argument("--project", action="store_true")
+    parser.add_argument("--skip-configure", action="store_true")
+    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
+
+    if args.skip_configure and (args.client is not None or args.user or args.project):
+        parser.error("--skip-configure cannot be combined with --client, --user, or --project")
 
     matlab_root = select_matlab_root(args.matlab_root, args.matlab_index)
     engine_dir = matlab_root / "extern" / "engines" / "python"
@@ -117,10 +127,20 @@ def main(argv: list[str] | None = None):
 
     print("matlabengine installed successfully.")
 
-    # Offer to install the workflow skill into an agent's skills directory.
-    from . import get_skill
+    if args.skip_configure:
+        return
 
-    get_skill.interactive_install(fallback="hint")
+    scope_name = "project" if args.project else "user"
+    if args.client is not None:
+        configure_mcp.configure_client(args.client, scope=scope_name, force=args.force, dry_run=args.dry_run)
+        return
+
+    configure_mcp.interactive_configure(
+        preferred_scope="project" if args.project else None,
+        force=args.force,
+        dry_run=args.dry_run,
+        noninteractive_fallback="hint",
+    )
 
 
 if __name__ == "__main__":
