@@ -22,6 +22,12 @@ dependencies = [
     "tomlkit>=0.13",
 ]
 
+[project.urls]
+Repository = "https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP"
+Issues = "https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/issues"
+Changelog = "https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/blob/main/CHANGELOG.md"
+Releases = "https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/releases"
+
 [project.optional-dependencies]
 dev = ["coverage>=7", "pytest>=8"]
 # 'matlab' pulls matlabengine from PyPI, whose version must match your installed
