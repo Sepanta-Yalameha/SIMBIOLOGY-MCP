@@ -1,13 +1,13 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from core.sbio_service import SbioService
-from core.sbio_model import to_matlab_string
-from engine.exceptions import AutosaveError
-from engine.matlab_layer import MatlabLayer
+from simbiology_mcp.core.sbio_service import SbioService
+from simbiology_mcp.core.sbio_model import to_matlab_string
+from simbiology_mcp.engine.exceptions import AutosaveError
+from simbiology_mcp.engine.matlab_layer import MatlabLayer
 
 
 @pytest.fixture
@@ -75,3 +75,4 @@ def test_save_project_clears_temp_path_even_if_delete_fails(service: SbioService
     assert commands == [
         f"sbiosaveproject({to_matlab_string(str(final_target))},'m')",
     ]
+

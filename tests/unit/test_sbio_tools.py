@@ -1,4 +1,4 @@
-"""Unit tests for the public SimBiology MCP tools."""
+﻿"""Unit tests for the public SimBiology MCP tools."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ import asyncio
 
 import pytest
 
-from tools import sbio_tools
-from tools.registry import TOOLS
+from simbiology_mcp.tools import sbio_tools
+from simbiology_mcp.tools.registry import TOOLS
 
 try:
-    from interfaces.mcp_server import build_server
+    from simbiology_mcp.interfaces.mcp_server import build_server
 except ModuleNotFoundError:
     build_server = None
 
@@ -58,8 +58,8 @@ SBIO_TOOL_NAMES = {
 }
 
 TOOL_MODULES = {
-    "tools.sbio_tools",
-    "tools.analysis_tools",
+    "simbiology_mcp.tools.sbio_tools",
+    "simbiology_mcp.tools.analysis_tools",
 }
 
 
@@ -487,3 +487,5 @@ def test_simulate_model_max_output_length_limits_only_returned_rows() -> None:
 def test_simulate_model_rejects_non_positive_max_output_length() -> None:
     with pytest.raises(ValueError, match="max_output_length"):
         sbio_tools._limit_timecourse_rows({"time": [0.0], "names": [], "data": {}}, max_output_length=0)
+
+

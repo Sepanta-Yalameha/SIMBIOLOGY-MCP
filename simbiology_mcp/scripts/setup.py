@@ -67,7 +67,7 @@ def select_matlab_root(root_arg, index_arg):
     if len(installs) == 1:
         return installs[0][1]
 
-    from scripts import tui
+    from . import tui
 
     if not tui.is_interactive():
         listing = "\n".join(f"  [{i}] {version} -> {root}" for i, (version, root) in enumerate(installs))
@@ -118,7 +118,7 @@ def main(argv: list[str] | None = None):
     print("matlabengine installed successfully.")
 
     # Offer to install the workflow skill into an agent's skills directory.
-    from scripts import get_skill
+    from . import get_skill
 
     get_skill.interactive_install(fallback="hint")
 

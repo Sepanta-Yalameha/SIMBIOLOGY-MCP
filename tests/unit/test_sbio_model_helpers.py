@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import math
 
 import pytest
 
-from core.sbio_model import (
+from simbiology_mcp.core.sbio_model import (
     _finite_or_none,
     _format_simdata,
     _matlab_string_cell,
@@ -48,3 +48,4 @@ def test_matlab_string_cell_and_variant_value_helpers() -> None:
     assert _matlab_string_cell(["A", "B"]) == "{'A','B'}"
     assert _matlab_variant_value(True) == "1.0"
     assert _matlab_variant_value("ATP") == "'ATP'"
+

@@ -10,8 +10,8 @@ Run from the repo root with the project venv:
     .\.venv\Scripts\python.exe .\demo_simulation.py
 """
 
-from core.sbio_service import SbioService
-from engine.matlab_layer import MatlabLayer
+from simbiology_mcp.core.sbio_service import SbioService
+from simbiology_mcp.engine.matlab_layer import MatlabLayer
 
 
 def main() -> None:

@@ -1,6 +1,6 @@
-import pytest
+﻿import pytest
 
-from external.igem import IgemUnavailableError, part as igem_part
+from simbiology_mcp.external.igem import IgemUnavailableError, part as igem_part
 
 pytestmark = pytest.mark.live
 
@@ -18,3 +18,4 @@ def test_igem_part_live():
     assert "created" in result
     assert "updated" in result
     assert "license_uuid" in result
+

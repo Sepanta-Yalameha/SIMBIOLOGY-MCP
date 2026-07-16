@@ -1,12 +1,12 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
 
 import pytest
 
-import external.igem as igem
-from tools.external_tools import igem_part, igem_search, igem_search_best
-from tools.registry import TOOLS
+import simbiology_mcp.external.igem as igem
+from simbiology_mcp.tools.external_tools import igem_part, igem_search, igem_search_best
+from simbiology_mcp.tools.registry import TOOLS
 
 
 def test_igem_search_is_registered() -> None:
@@ -162,3 +162,4 @@ def test_igem_search_best_returns_selected_and_alternatives(monkeypatch: pytest.
             "updated": "2026-01-03T00:00:00+00:00",
         }
     ]
+

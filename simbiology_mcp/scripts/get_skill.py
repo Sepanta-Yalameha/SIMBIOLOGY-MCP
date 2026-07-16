@@ -1,10 +1,8 @@
 """Print or install the packaged SimBiology skill markdown.
 
 With no flags this launches an interactive picker (arrow keys) to choose the
-agent to install the skill for. Flags (`--install`, `--client`, `--project`,
-`--install-path`, `--print`) drive the same behaviour non-interactively, and a
-non-interactive terminal falls back to printing SKILL.md so the output stays
-pipeable.
+agent to install the skill for. Flags (`--client`, `--project`, `--user`,
+`--install-path`, `--print`) drive the same behaviour non-interactively.
 """
 
 from __future__ import annotations
@@ -13,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from scripts import tui
+from . import tui
 
 # Directory name the skill is installed under. Matches the `name` in SKILL.md's
 # frontmatter so the folder and the agent's skill invocation stay consistent.
@@ -129,7 +127,8 @@ def interactive_install(*, scope: str = "user", fallback: str = "print") -> None
     if not _is_interactive():
         if fallback == "hint":
             print(
-                "Skill not installed: no interactive terminal detected. Install it with " "`simbiology-mcp get-skill --install --client <claude-code|cursor|codex|windsurf|copilot>`.",
+                "Skill not installed: no interactive terminal detected. Install it with "
+                "`simbiology-mcp get-skill --client <claude-code|cursor|codex|windsurf|copilot>`.",
                 file=sys.stderr,
             )
         elif fallback == "error":
@@ -151,33 +150,41 @@ def main(argv: list[str] | None = None) -> None:
         prog="simbiology-mcp get-skill",
         description="Install or print the packaged SimBiology workflow skill (SKILL.md). With no flags, pick an agent interactively.",
     )
-    parser.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")
-    parser.add_argument("--install", action="store_true", help="Install SKILL.md into the target client's skills directory (no prompt).")
-    parser.add_argument("--client", choices=sorted(_CLIENT_SKILL_DIRS), default=None, help="Client to install for. Omit with --install to choose from the interactive menu.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")
+    mode.add_argument("--client", choices=sorted(_CLIENT_SKILL_DIRS), default=None, help="Install directly for a client. Combine with --user or --project to choose scope.")
+    mode.add_argument("--install-path", help="Install directly to an explicit path.")
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--user", action="store_true", help="Install into the user-level skills directory (default).")
     scope.add_argument("--project", action="store_true", help="Install into the current project's skills directory.")
-    parser.add_argument("--install-path", help="Install to an explicit path instead of a client skills directory.")
 
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
+    scope_name = "project" if args.project else "user"
 
     if args.print_skill:
+        if args.project or args.user:
+            parser.error("--user and --project cannot be used with --print")
         print(_skill_text())
+        return
 
     if args.install_path is not None:
+        if args.project or args.user:
+            parser.error("--user and --project cannot be used with --install-path")
         _, target = _write_skill(Path(args.install_path))
         print(f"Installed skill to {target}")
-    elif args.install:
-        scope_name = "project" if args.project else "user"
-        if args.client is not None:
-            _install_for_client(args.client, scope_name)
-        else:
-            # No agent named: choose from the menu, keeping the chosen scope.
-            # With no interactive terminal there is nothing to prompt, so error.
-            interactive_install(scope=scope_name, fallback="error")
-    elif not args.print_skill:
-        interactive_install(scope="user", fallback="print")
+        return
 
+    if args.client is not None:
+        _install_for_client(args.client, scope_name)
+        return
+
+    if args.project or args.user:
+        # An explicit scope means the user asked for installation, so fail fast
+        # instead of silently printing when we cannot open the picker.
+        interactive_install(scope=scope_name, fallback="error")
+        return
+
+    interactive_install(scope="user", fallback="print")
 
 if __name__ == "__main__":
     main()

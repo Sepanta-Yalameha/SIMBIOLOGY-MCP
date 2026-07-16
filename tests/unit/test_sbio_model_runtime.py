@@ -1,11 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from core.sbio_model import SbioModel
-from engine.exceptions import ElementNotFoundError
+from simbiology_mcp.core.sbio_model import SbioModel
+from simbiology_mcp.engine.exceptions import ElementNotFoundError
 
 
 class FakeService:
@@ -168,3 +168,4 @@ def test_export_plot_rejects_mismatched_legend_length(model: SbioModel, service:
 
     with pytest.raises(ValueError, match="legend_labels must match"):
         model.export_plot("out.png", legend_labels=["only-one"])
+

@@ -14,9 +14,9 @@ from pathlib import Path
 import re
 from typing import Any, Literal
 
-from core.sbio_model import SbioModel, build_reaction_equation, split_reaction_equation
-from core.sbio_service import SbioService
-from tools.registry import register
+from ..core.sbio_model import SbioModel, build_reaction_equation, split_reaction_equation
+from ..core.sbio_service import SbioService
+from .registry import register
 
 SolverType = Literal["ode15s", "ode23t", "ode45", "sundials", "ssa", "expltau", "impltau"]
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interfaces.mcp_server import run
+from simbiology_mcp.interfaces.mcp_server import run
 
 if __name__ == "__main__":
     run()

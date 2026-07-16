@@ -1,8 +1,8 @@
-import math
+﻿import math
 
 import pytest
 
-from core.sbio_service import SbioService
+from simbiology_mcp.core.sbio_service import SbioService
 
 pytestmark = pytest.mark.matlab
 
@@ -87,3 +87,4 @@ def test_simulate_species_filter(simulatable_project):
     assert list(result["data"]) == ["B"]
     assert result["names"] == ["B"]
     assert len(result["data"]["B"]) == len(result["time"])
+
