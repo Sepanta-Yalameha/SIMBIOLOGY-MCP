@@ -71,8 +71,6 @@ Build the model completely before simulating.
 - Do not create unused parameters unless they have a clear purpose in the model.
 - Validate constants with iGEM, PubMed, or other scientific sources when possible.
 
-***Major correction: every species should not merely "interact with the rest of the simulation"; it should have the specific production, consumption, and loss processes required by the biology.***
-
 ## Simulation
 
 Once the model is complete:
@@ -125,8 +123,6 @@ Practical guidance:
 - prefer variants over repeatedly mutating the base model for scenario testing
 - keep each variant internally coherent and clearly named
 - remember that modifying a variant replaces its full content, so provide the complete intended variant definition
-
-***Major addition: variants are for alternate named model states, while doses are for changes applied during a run over time.***
 
 ## Export and Analysis
 
@@ -230,5 +226,3 @@ The MCP exposes the following tool groups:
 - Export results to CSV and PNG when the user needs outputs or analysis.
 - Prefer the common reaction patterns above when they fit the biology.
 - Use MCP analysis tools whenever possible instead of manually parsing large exported outputs.
-
-***Major correction: this skill should guide the agent toward the MCP tool surface first, not toward ad hoc manual analysis or external scripting unless the MCP tools are missing a needed capability.***
