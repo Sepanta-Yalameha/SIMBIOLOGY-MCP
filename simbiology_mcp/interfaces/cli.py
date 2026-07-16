@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 
-from .. import configure_mcp
 from ..scripts import get_skill, setup
 
 
@@ -23,26 +22,9 @@ def build_parser() -> argparse.ArgumentParser:
     get_skill_scope.add_argument("--user", action="store_true", help="Install into the user-level skills directory (default).")
     get_skill_scope.add_argument("--project", action="store_true", help="Install into the current project's skills directory.")
 
-    configure_parser = subparsers.add_parser("configure", help="Configure an MCP client for the SimBiology server.")
-    configure_parser.add_argument("--client", choices=configure_mcp.client_names())
-    configure_scope = configure_parser.add_mutually_exclusive_group()
-    configure_scope.add_argument("--user", action="store_true", help="Configure the user scope (default).")
-    configure_scope.add_argument("--project", action="store_true", help="Configure the project scope.")
-    configure_parser.add_argument("--force", action="store_true", help="Replace an existing entry without prompting.")
-    configure_parser.add_argument("--dry-run", action="store_true", help="Print the generated configuration without writing it.")
-    configure_parser.add_argument("--list-clients", action="store_true", help="List supported MCP clients.")
-
     setup_parser = subparsers.add_parser("setup", help="Install MATLAB Engine for Python from a local MATLAB installation.")
     setup_parser.add_argument("--matlab-root")
     setup_parser.add_argument("--matlab-index", type=int)
-    setup_client = setup_parser.add_mutually_exclusive_group()
-    setup_client.add_argument("--client", choices=configure_mcp.client_names())
-    setup_scope = setup_parser.add_mutually_exclusive_group()
-    setup_scope.add_argument("--user", action="store_true", help="Configure the user scope after install (default).")
-    setup_scope.add_argument("--project", action="store_true", help="Configure the project scope after install.")
-    setup_parser.add_argument("--skip-configure", action="store_true", help="Install MATLAB Engine only.")
-    setup_parser.add_argument("--force", action="store_true", help="Replace an existing entry without prompting.")
-    setup_parser.add_argument("--dry-run", action="store_true", help="Print the generated configuration without writing it.")
 
     return parser
 
@@ -67,10 +49,6 @@ def main() -> None:
 
     if args.command == "get-skill":
         get_skill.main(_get_skill_argv(args))
-        return
-
-    if args.command == "configure":
-        configure_mcp.main(_configure_argv(args))
         return
 
     if args.command == "setup":
@@ -101,35 +79,6 @@ def _setup_argv(args: argparse.Namespace) -> list[str]:
         argv.extend(["--matlab-root", args.matlab_root])
     if args.matlab_index is not None:
         argv.extend(["--matlab-index", str(args.matlab_index)])
-    if args.client is not None:
-        argv.extend(["--client", args.client])
-    if args.project:
-        argv.append("--project")
-    elif args.user:
-        argv.append("--user")
-    if args.skip_configure:
-        argv.append("--skip-configure")
-    if args.force:
-        argv.append("--force")
-    if args.dry_run:
-        argv.append("--dry-run")
-    return argv
-
-
-def _configure_argv(args: argparse.Namespace) -> list[str]:
-    argv: list[str] = []
-    if args.client is not None:
-        argv.extend(["--client", args.client])
-    if args.project:
-        argv.append("--project")
-    elif args.user:
-        argv.append("--user")
-    if args.force:
-        argv.append("--force")
-    if args.dry_run:
-        argv.append("--dry-run")
-    if args.list_clients:
-        argv.append("--list-clients")
     return argv
 
 
