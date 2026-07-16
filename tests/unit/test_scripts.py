@@ -89,15 +89,11 @@ def test_get_skill_main_writes_to_install_path(monkeypatch, capsys, tmp_path: Pa
     assert f"Installed skill to {target.resolve()}" in output
 
 
-def test_get_skill_main_prints_then_writes(monkeypatch, capsys, tmp_path: Path) -> None:
-    target = tmp_path / "agent" / "SKILL.md"
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--print", "--install-path", str(target)])
+def test_get_skill_main_rejects_print_with_install_path(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--print", "--install-path", "out"])
 
-    get_skill.main()
-
-    output = capsys.readouterr().out
-    assert get_skill._skill_text() in output
-    assert f"Installed skill to {target.resolve()}" in output
+    with pytest.raises(SystemExit):
+        get_skill.main()
 
 
 def _fake_keys(sequence: list[str]):
@@ -131,7 +127,7 @@ def test_client_target_rejects_unknown_client() -> None:
 
 def test_get_skill_install_user_scope(monkeypatch, capsys, tmp_path: Path) -> None:
     monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install", "--client", "claude-code"])
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--client", "claude-code"])
 
     get_skill.main()
 
@@ -142,33 +138,28 @@ def test_get_skill_install_user_scope(monkeypatch, capsys, tmp_path: Path) -> No
 
 def test_get_skill_install_project_scope(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path)
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install", "--client", "cursor", "--project"])
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--client", "cursor", "--project"])
 
     get_skill.main()
 
     assert (tmp_path / ".cursor" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
 
 
-def test_get_skill_print_and_install_together(monkeypatch, capsys, tmp_path: Path) -> None:
-    monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--print", "--install", "--client", "claude-code"])
+@pytest.mark.parametrize("scope_flag", ["--project", "--user"])
+def test_get_skill_print_rejects_scope_flags(monkeypatch, scope_flag: str) -> None:
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--print", scope_flag])
 
-    get_skill.main()
-
-    out = capsys.readouterr().out
-    target = tmp_path / ".claude" / "skills" / "simbiology-workflow" / "SKILL.md"
-    assert get_skill._skill_text() in out
-    assert f"Installed Claude Code skill to {target.resolve()}" in out
-    assert target.exists()
+    with pytest.raises(SystemExit):
+        get_skill.main()
 
 
 def test_get_skill_install_without_client_prompts_when_interactive(monkeypatch, tmp_path: Path) -> None:
-    # --install with a scope but no --client should still show the picker.
+    # A scope flag with no --client should still show the picker.
     monkeypatch.setattr(get_skill, "_is_interactive", lambda: True)
     monkeypatch.setattr(get_skill, "_enable_windows_ansi", lambda: None)
     monkeypatch.setattr(get_skill, "_select_client", lambda **kwargs: "codex")
     monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path)
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install", "--project"])
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--project"])
 
     get_skill.main()
 
@@ -176,11 +167,11 @@ def test_get_skill_install_without_client_prompts_when_interactive(monkeypatch, 
 
 
 def test_get_skill_install_without_client_errors_when_not_interactive(monkeypatch, tmp_path: Path) -> None:
-    # Without a terminal to prompt in, --install with no --client errors instead
-    # of silently choosing an agent.
+    # Without a terminal to prompt in, a scope flag with no --client errors
+    # instead of silently choosing an agent.
     monkeypatch.setattr(get_skill, "_is_interactive", lambda: False)
     monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install"])
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--project"])
 
     with pytest.raises(SystemExit):
         get_skill.main()
@@ -189,7 +180,15 @@ def test_get_skill_install_without_client_errors_when_not_interactive(monkeypatc
 
 
 def test_get_skill_install_rejects_unknown_client(monkeypatch) -> None:
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install", "--client", "emacs"])
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--client", "emacs"])
+
+    with pytest.raises(SystemExit):
+        get_skill.main()
+
+
+@pytest.mark.parametrize("scope_flag", ["--user", "--project"])
+def test_get_skill_install_path_rejects_scope_flags(monkeypatch, scope_flag: str) -> None:
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install-path", "out", scope_flag])
 
     with pytest.raises(SystemExit):
         get_skill.main()
@@ -281,24 +280,23 @@ def test_cli_get_skill_dispatches(monkeypatch) -> None:
     assert called == [["--print"]]
 
 
-def test_cli_get_skill_forwards_install_and_scope(monkeypatch) -> None:
+def test_cli_get_skill_forwards_project_scope(monkeypatch) -> None:
     captured: list[list[str]] = []
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill", "--install", "--project"])
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill", "--project"])
     monkeypatch.setattr(get_skill, "main", lambda argv=None: captured.append(argv or []))
 
     cli.main()
 
-    assert captured == [["--install", "--project"]]
+    assert captured == [["--project"]]
 
 
-def test_cli_get_skill_forwards_client_and_install_path(monkeypatch) -> None:
+def test_cli_get_skill_rejects_client_and_install_path(monkeypatch) -> None:
     captured: list[list[str]] = []
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill", "--install", "--client", "cursor", "--install-path", "out"])
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill", "--client", "cursor", "--install-path", "out"])
     monkeypatch.setattr(get_skill, "main", lambda argv=None: captured.append(argv or []))
 
-    cli.main()
-
-    assert captured == [["--install", "--client", "cursor", "--install-path", "out"]]
+    with pytest.raises(SystemExit):
+        cli.main()
 
 
 def test_cli_get_skill_bare_forwards_no_flags(monkeypatch) -> None:
@@ -313,12 +311,12 @@ def test_cli_get_skill_bare_forwards_no_flags(monkeypatch) -> None:
 
 def test_cli_get_skill_forwards_user_scope(monkeypatch) -> None:
     captured: list[list[str]] = []
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill", "--install", "--user"])
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill", "--user"])
     monkeypatch.setattr(get_skill, "main", lambda argv=None: captured.append(argv or []))
 
     cli.main()
 
-    assert captured == [["--install", "--user"]]
+    assert captured == [["--user"]]
 
 
 def test_cli_setup_dispatches(monkeypatch) -> None:
