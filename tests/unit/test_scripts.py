@@ -57,12 +57,15 @@ def test_skill_path_falls_back_to_packaged_copy(monkeypatch, tmp_path: Path) -> 
     assert get_skill._skill_path() == packaged
 
 
-def test_get_skill_main_without_args_prints_help(monkeypatch, capsys) -> None:
+def test_get_skill_main_without_args_prints_skill_when_not_a_tty(monkeypatch, capsys) -> None:
+    # No flags and no interactive terminal: get-skill prints the skill so the
+    # command stays pipeable. A real TTY would instead show the agent picker.
+    monkeypatch.setattr(get_skill, "_is_interactive", lambda: False)
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill"])
 
     get_skill.main()
 
-    assert "usage:" in capsys.readouterr().out
+    assert capsys.readouterr().out == f"{get_skill._skill_text()}\n"
 
 
 def test_get_skill_main_prints_skill(monkeypatch, capsys) -> None:
@@ -81,8 +84,8 @@ def test_get_skill_main_writes_to_install_path(monkeypatch, capsys, tmp_path: Pa
 
     output = capsys.readouterr().out
     assert target.exists()
-    assert str(get_skill._skill_path().resolve()) in output
-    assert str(target.resolve()) in output
+    assert target.read_text(encoding="utf-8") == get_skill._skill_text()
+    assert f"Installed skill to {target.resolve()}" in output
 
 
 def test_get_skill_main_prints_then_writes(monkeypatch, capsys, tmp_path: Path) -> None:
@@ -93,7 +96,120 @@ def test_get_skill_main_prints_then_writes(monkeypatch, capsys, tmp_path: Path) 
 
     output = capsys.readouterr().out
     assert get_skill._skill_text() in output
-    assert f"Copied skill from {get_skill._skill_path().resolve()} to {target.resolve()}" in output
+    assert f"Installed skill to {target.resolve()}" in output
+
+
+def _fake_keys(sequence: list[str]):
+    it = iter(sequence)
+    return lambda: next(it)
+
+
+def test_client_target_resolves_per_client_and_scope(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
+    monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path)
+
+    cases = {
+        ("claude-code", "user"): ".claude/skills",
+        ("claude-code", "project"): ".claude/skills",
+        ("cursor", "user"): ".cursor/skills",
+        ("codex", "user"): ".agents/skills",
+        ("windsurf", "user"): ".codeium/windsurf/skills",
+        ("copilot", "user"): ".copilot/skills",
+        ("copilot", "project"): ".github/skills",
+    }
+    for (client, scope), rel in cases.items():
+        expected = tmp_path.joinpath(*rel.split("/"), "simbiology-workflow", "SKILL.md")
+        assert get_skill._client_target(client, scope) == expected
+
+
+def test_client_target_rejects_unknown_client() -> None:
+    with pytest.raises(SystemExit, match="Unknown client"):
+        get_skill._client_target("emacs", "user")
+
+
+def test_get_skill_install_user_scope(monkeypatch, capsys, tmp_path: Path) -> None:
+    monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install", "--client", "claude-code"])
+
+    get_skill.main()
+
+    target = tmp_path / ".claude" / "skills" / "simbiology-workflow" / "SKILL.md"
+    assert target.read_text(encoding="utf-8") == get_skill._skill_text()
+    assert f"Installed skill to {target.resolve()}" in capsys.readouterr().out
+
+
+def test_get_skill_install_project_scope(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path)
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install", "--client", "cursor", "--project"])
+
+    get_skill.main()
+
+    assert (tmp_path / ".cursor" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
+
+
+def test_get_skill_install_rejects_unknown_client(monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install", "--client", "emacs"])
+
+    with pytest.raises(SystemExit):
+        get_skill.main()
+
+
+def test_select_client_navigates_and_selects() -> None:
+    import io
+
+    chosen = get_skill._select_client(read_key=_fake_keys(["down", "down", "enter"]), stream=io.StringIO())
+
+    assert chosen == get_skill._CLIENT_ORDER[2]
+
+
+def test_select_client_wraps_up_and_cancels() -> None:
+    import io
+
+    up = get_skill._select_client(read_key=_fake_keys(["up", "enter"]), stream=io.StringIO())
+    cancelled = get_skill._select_client(read_key=_fake_keys(["cancel"]), stream=io.StringIO())
+
+    assert up == get_skill._CLIENT_ORDER[-1]
+    assert cancelled is None
+
+
+def test_interactive_install_non_tty_prints_skill(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(get_skill, "_is_interactive", lambda: False)
+
+    get_skill.interactive_install(fallback="print")
+
+    assert capsys.readouterr().out == f"{get_skill._skill_text()}\n"
+
+
+def test_interactive_install_non_tty_hint(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(get_skill, "_is_interactive", lambda: False)
+
+    get_skill.interactive_install(fallback="hint")
+
+    assert "no interactive terminal" in capsys.readouterr().err.lower()
+
+
+def test_interactive_install_writes_selected_client(monkeypatch, capsys, tmp_path: Path) -> None:
+    monkeypatch.setattr(get_skill, "_is_interactive", lambda: True)
+    monkeypatch.setattr(get_skill, "_enable_windows_ansi", lambda: None)
+    monkeypatch.setattr(get_skill, "_select_client", lambda **kwargs: "windsurf")
+    monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
+
+    get_skill.interactive_install()
+
+    assert (tmp_path / ".codeium" / "windsurf" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
+    assert "Installed" in capsys.readouterr().out
+
+
+def test_interactive_install_cancelled(monkeypatch, capsys, tmp_path: Path) -> None:
+    monkeypatch.setattr(get_skill, "_is_interactive", lambda: True)
+    monkeypatch.setattr(get_skill, "_enable_windows_ansi", lambda: None)
+    monkeypatch.setattr(get_skill, "_select_client", lambda **kwargs: None)
+    monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
+
+    get_skill.interactive_install()
+
+    assert "cancelled" in capsys.readouterr().out.lower()
+    assert not (tmp_path / ".claude").exists()
 
 
 def test_cli_main_without_args_prints_help(monkeypatch, capsys) -> None:
@@ -122,6 +238,36 @@ def test_cli_get_skill_dispatches(monkeypatch) -> None:
     cli.main()
 
     assert called == [["--print"]]
+
+
+def test_cli_get_skill_forwards_install_and_scope(monkeypatch) -> None:
+    captured: list[list[str]] = []
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill", "--install", "--project"])
+    monkeypatch.setattr(get_skill, "main", lambda argv=None: captured.append(argv or []))
+
+    cli.main()
+
+    assert captured == [["--install", "--project"]]
+
+
+def test_cli_get_skill_forwards_client_and_install_path(monkeypatch) -> None:
+    captured: list[list[str]] = []
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill", "--install", "--client", "cursor", "--install-path", "out"])
+    monkeypatch.setattr(get_skill, "main", lambda argv=None: captured.append(argv or []))
+
+    cli.main()
+
+    assert captured == [["--install", "--client", "cursor", "--install-path", "out"]]
+
+
+def test_cli_get_skill_bare_forwards_no_flags(monkeypatch) -> None:
+    captured: list[list[str]] = []
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "get-skill"])
+    monkeypatch.setattr(get_skill, "main", lambda argv=None: captured.append(argv or []))
+
+    cli.main()
+
+    assert captured == [[]]
 
 
 def test_cli_setup_dispatches(monkeypatch) -> None:
@@ -184,9 +330,11 @@ def test_setup_main_runs_uv_and_engine_install(monkeypatch, tmp_path: Path, caps
             return Result(0)
         return Result(0)
 
+    skill_calls: list[dict] = []
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root)])
     monkeypatch.setattr(setup.subprocess, "run", fake_run)
     monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    monkeypatch.setattr(get_skill, "interactive_install", lambda **kwargs: skill_calls.append(kwargs))
 
     setup.main()
 
@@ -198,6 +346,7 @@ def test_setup_main_runs_uv_and_engine_install(monkeypatch, tmp_path: Path, caps
     assert calls[1][0][0:3] == [setup.sys.executable, "setup.py", "build"]
     assert calls[1][1] == engine_dir
     assert "matlabengine installed successfully." in capsys.readouterr().out
+    assert skill_calls == [{"fallback": "hint"}]
 
 
 def test_setup_main_exits_when_engine_dir_missing(monkeypatch, tmp_path: Path) -> None:

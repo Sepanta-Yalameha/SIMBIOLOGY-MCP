@@ -60,16 +60,21 @@ uv tool install simbiology-mcp
 simbiology-mcp setup
 ```
 
-Then point your MCP client at the installed `simbiology-mcp` command with the `start` subcommand. To get the packaged skill guidance, run:
+Then point your MCP client at the installed `simbiology-mcp` command with the `start` subcommand (see [Wiring into an MCP client](#wiring-into-an-mcp-client)).
+
+`simbiology-mcp setup` finishes by offering to install the packaged workflow skill: it shows an interactive menu where you pick your agent (Claude Code, Cursor, Codex, Windsurf, GitHub Copilot) with the arrow keys, then writes `SKILL.md` into that agent's skills directory. You can re-run the picker any time:
 
 ```powershell
 simbiology-mcp get-skill
 ```
 
-That helper prints the packaged `SKILL.md` to the terminal by default. To copy it to a specific location instead, pass an explicit destination:
+To skip the menu, install non-interactively (the target directory is created if missing):
 
 ```powershell
+simbiology-mcp get-skill --install                        # Claude Code, user scope (~/.claude/skills/...)
+simbiology-mcp get-skill --install --client cursor --project
 simbiology-mcp get-skill --install-path C:\path\to\SKILL.md
+simbiology-mcp get-skill --print                          # print SKILL.md to stdout instead
 ```
 
 ### 3. Plain `pip`
@@ -79,8 +84,9 @@ Use this if you do not want `uv tool install`.
 ```powershell
 python -m pip install simbiology-mcp
 simbiology-mcp setup
-simbiology-mcp get-skill
 ```
+
+`setup` will offer to install the skill; run `simbiology-mcp get-skill` again later to re-open the picker.
 
 ---
 

@@ -103,6 +103,11 @@ def main(argv: list[str] | None = None):
 
     print("matlabengine installed successfully.")
 
+    # Offer to install the workflow skill into an agent's skills directory.
+    from scripts import get_skill
+
+    get_skill.interactive_install(fallback="hint")
+
 
 if __name__ == "__main__":
     main()
