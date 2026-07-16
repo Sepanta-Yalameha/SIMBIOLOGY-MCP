@@ -19,6 +19,7 @@ dependencies = [
     "httpx>=0.28",
     "python-dotenv>=1.2",
     "igem-registry-api>=0.1",
+    "tomlkit>=0.13",
 ]
 
 [project.optional-dependencies]
