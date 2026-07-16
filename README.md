@@ -172,7 +172,7 @@ tests/       Unit tests plus MATLAB/live integration tests
 
 ## Authors
 
-- [Yojith Biradavolu](https://github.com/yojith)
+- [Yojith Sai Biradavolu](https://github.com/yojith)
 - [Sepanta Yalameha](https://github.com/Sepanta-Yalameha)
 
 Contributions, issues, and feature requests are welcome through the project’s [GitHub repository](https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP).
