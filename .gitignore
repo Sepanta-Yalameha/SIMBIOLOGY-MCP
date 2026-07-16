@@ -8,6 +8,7 @@ AGENTS.md
 docs/
 .env
 out.csv
+*.pdf
 # Python
 **/__pycache__/
 *.pyc
@@ -19,4 +20,3 @@ build/
 dist/
 *.egg-info/
 *.whl
-
