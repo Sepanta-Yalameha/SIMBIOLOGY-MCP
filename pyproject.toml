@@ -24,22 +24,21 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["coverage>=7", "pytest>=8"]
 # 'matlab' pulls matlabengine from PyPI, whose version must match your installed
-# MATLAB release. scripts/setup.py installs it straight from your local MATLAB
+# MATLAB release. simbiology_mcp/scripts/setup.py installs it straight from your local MATLAB
 # instead; prefer that unless you know the PyPI version lines up.
 matlab = ["matlabengine"]
 
 [project.scripts]
-simbiology-mcp = "interfaces.cli:main"
+simbiology-mcp = "simbiology_mcp.interfaces.cli:main"
 
-[tool.setuptools]
-# Flat layout: the server's top-level packages, listed explicitly.
-packages = ["core", "engine", "external", "interfaces", "scripts", "skills", "tools"]
+[tool.setuptools.packages.find]
+include = ["simbiology_mcp*"]
 
 [tool.setuptools.package-data]
-skills = ["SKILL.md"]
+"simbiology_mcp.skills" = ["SKILL.md"]
 
 [tool.coverage.run]
-source = ["core", "engine", "external", "interfaces", "scripts", "skills", "tools"]
+source = ["simbiology_mcp"]
 
 [tool.black]
 line-length = 200

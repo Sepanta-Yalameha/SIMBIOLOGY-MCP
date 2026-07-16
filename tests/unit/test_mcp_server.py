@@ -1,11 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import sys
 import types
 
 import pytest
 
-from interfaces import mcp_server
+from simbiology_mcp.interfaces import mcp_server
 
 
 def test_build_server_adds_all_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -51,3 +51,4 @@ def test_run_starts_server_when_matlab_engine_present(monkeypatch: pytest.Monkey
     mcp_server.run()
 
     assert called == ["run"]
+

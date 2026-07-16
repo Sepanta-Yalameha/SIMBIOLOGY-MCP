@@ -1,12 +1,12 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import sys
 from pathlib import Path
 
 import pytest
 
-from interfaces import cli
-from scripts import get_skill, setup, tui
+from simbiology_mcp.interfaces import cli
+from simbiology_mcp.scripts import get_skill, setup, tui
 
 
 def test_skill_path_uses_packaged_copy(monkeypatch, tmp_path: Path) -> None:
@@ -464,3 +464,4 @@ def test_setup_main_exits_when_engine_dir_missing(monkeypatch, tmp_path: Path) -
 
     with pytest.raises(SystemExit, match="MATLAB engine path not found"):
         setup.main()
+

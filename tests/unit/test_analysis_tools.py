@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from tools import analysis_tools
+from simbiology_mcp.tools import analysis_tools
 
 SAMPLE = Path(__file__).resolve().parents[1] / "samples" / "analysis_sample.csv"
 
@@ -61,3 +61,4 @@ def test_analysis_tools_support_custom_delimiter(tmp_path: Path) -> None:
 def test_analysis_tools_reject_missing_series() -> None:
     with pytest.raises(ValueError, match="not found"):
         analysis_tools.series_max(str(SAMPLE), series="C")
+

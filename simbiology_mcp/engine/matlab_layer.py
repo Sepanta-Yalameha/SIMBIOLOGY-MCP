@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from engine.exceptions import (
+from .exceptions import (
     MatlabCommandNotFoundError,
     MatlabCommandFailedError,
     MatlabNotAliveError,

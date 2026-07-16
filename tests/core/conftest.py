@@ -1,10 +1,10 @@
-"""Shared fixtures for core tests: one engine per session; saved sample projects."""
+﻿"""Shared fixtures for core tests: one engine per session; saved sample projects."""
 
 import importlib.util
 
 import pytest
 
-from engine.matlab_layer import MatlabLayer
+from simbiology_mcp.engine.matlab_layer import MatlabLayer
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -58,3 +58,4 @@ def two_model_project(tmp_path_factory):
     e("m1=sbiomodel('demo'); addcompartment(m1,'cell'); " "m2=sbiomodel('demo2'); addcompartment(m2,'cell');")
     e(f"sbiosaveproject('{path}','m1','m2');")
     return path
+

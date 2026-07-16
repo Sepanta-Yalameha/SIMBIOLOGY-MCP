@@ -1,9 +1,9 @@
-"""End-to-end tests of the public MCP tools against a real MATLAB engine.
+﻿"""End-to-end tests of the public MCP tools against a real MATLAB engine.
 
 The unit tests in ``tests/unit/test_sbio_tools.py`` drive the ``@register`` tool
 functions against a mocked ``DummyService`` (asserting the exact commands they
 emit). These tests instead exercise the *same* tool functions through the real
-``SbioService``/MATLAB engine — the actual path an MCP agent takes — so that
+``SbioService``/MATLAB engine â€” the actual path an MCP agent takes â€” so that
 doses, variants, and simulation are validated end to end, not just at the
 command-string layer.
 
@@ -17,7 +17,7 @@ import math
 
 import pytest
 
-from tools import sbio_tools
+from simbiology_mcp.tools import sbio_tools
 
 pytestmark = pytest.mark.matlab
 
@@ -150,3 +150,4 @@ def test_tools_export_graph_and_csv_end_to_end(tmp_path):
     assert result["path"] == str(csv_out) and result["columns"] == ["seconds", "Drug", "Metabolite"]
     assert csv_out.exists() and csv_out.read_text().splitlines()[0] == "seconds;Drug;Metabolite"
     assert result["rows"] == len(csv_out.read_text().splitlines()) - 1
+

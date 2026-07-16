@@ -1,9 +1,9 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 import pytest
-from core.sbio_service import SbioService
-from core.sbio_model import SbioModel
-from engine.exceptions import ProjectNotLoadedError, ModelNotFoundError, ElementNotFoundError
+from simbiology_mcp.core.sbio_service import SbioService
+from simbiology_mcp.core.sbio_model import SbioModel
+from simbiology_mcp.engine.exceptions import ProjectNotLoadedError, ModelNotFoundError, ElementNotFoundError
 
 pytestmark = pytest.mark.matlab
 
@@ -358,7 +358,7 @@ def test_export_plot_with_dose_writes_png(simulatable_project, tmp_path):
 
 def test_export_csv_matches_simulate(simulatable_project):
     # CSV export is the real time-course: same values simulate() returns.
-    from tools import sbio_tools
+    from simbiology_mcp.tools import sbio_tools
 
     svc = _loaded(simulatable_project)
     m = svc.get_model()
@@ -382,7 +382,7 @@ def test_export_csv_matches_simulate(simulatable_project):
 
 
 def test_export_csv_honors_dose(simulatable_project):
-    from tools import sbio_tools
+    from simbiology_mcp.tools import sbio_tools
 
     svc = _loaded(simulatable_project)
     m = svc.get_model()
@@ -417,3 +417,5 @@ def test_get_model_by_name_with_multiple(two_model_project):
     svc = SbioService()
     svc.load_project(two_model_project)
     assert svc.get_model("demo2").name == "demo2"
+
+

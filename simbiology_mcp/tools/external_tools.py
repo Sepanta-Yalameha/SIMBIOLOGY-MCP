@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from external import igem, pubmed
-from tools.registry import register
+from ..external import igem, pubmed
+from .registry import register
 
 
 @register("pubmed_search")

@@ -6,7 +6,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from tools.registry import register
+from .registry import register
 
 
 def _read_series_csv(path: str, delimiter: str = ",") -> tuple[str, list[str], list[dict[str, float]]]:

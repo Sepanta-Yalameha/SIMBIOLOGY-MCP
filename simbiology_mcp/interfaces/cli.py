@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from scripts import get_skill, setup
+from ..scripts import get_skill, setup
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _run_server() -> None:
-    from interfaces.mcp_server import run as run_server
+    from .mcp_server import run as run_server
 
     run_server()
 

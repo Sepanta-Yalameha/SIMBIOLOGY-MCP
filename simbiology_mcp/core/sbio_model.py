@@ -10,10 +10,10 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from engine.exceptions import ElementNotFoundError
+from ..engine.exceptions import ElementNotFoundError
 
 if TYPE_CHECKING:
-    from core.sbio_service import SbioService
+    from .sbio_service import SbioService
 
 
 def to_matlab_string(value: object) -> str:

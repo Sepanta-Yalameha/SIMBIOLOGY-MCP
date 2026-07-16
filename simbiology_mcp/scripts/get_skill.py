@@ -11,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from scripts import tui
+from . import tui
 
 # Directory name the skill is installed under. Matches the `name` in SKILL.md's
 # frontmatter so the folder and the agent's skill invocation stay consistent.

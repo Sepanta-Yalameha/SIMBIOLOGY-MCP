@@ -1,4 +1,4 @@
-"""Pure unit tests for SbioModel command builders (no MATLAB engine).
+﻿"""Pure unit tests for SbioModel command builders (no MATLAB engine).
 
 The ``*_cmd`` builders only assemble MATLAB command strings; they never touch
 the service, so they can be exercised with ``service=None`` and run anywhere
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.sbio_model import (
+from simbiology_mcp.core.sbio_model import (
     SbioModel,
     build_reaction_equation,
     split_reaction_equation,
@@ -240,3 +240,4 @@ def test_set_configset_cmd_formats_string_and_numeric_fields(model):
 def test_set_configset_cmd_rejects_unknown_setting(model):
     with pytest.raises(KeyError):
         model.set_configset_cmd(nonsense=1)
+

@@ -1,12 +1,12 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from core.sbio_service import SbioService
-from engine.exceptions import MatlabError, ModelNotFoundError, ProjectNotLoadedError
-from engine.matlab_layer import MatlabLayer
+from simbiology_mcp.core.sbio_service import SbioService
+from simbiology_mcp.engine.exceptions import MatlabError, ModelNotFoundError, ProjectNotLoadedError
+from simbiology_mcp.engine.matlab_layer import MatlabLayer
 
 
 @pytest.fixture
@@ -90,3 +90,4 @@ def test_target_path_and_default_stem_helpers(service: SbioService) -> None:
     assert service._default_stem() == "simbiology"
     service._models = {"named": "m"}
     assert service._default_stem() == "named"
+

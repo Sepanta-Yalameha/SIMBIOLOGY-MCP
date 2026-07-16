@@ -45,7 +45,7 @@ Then point your MCP client at the repo entry point:
   "mcpServers": {
     "simbiology": {
       "command": "C:/path/to/SIMBIOLOGY-MCP/.venv/Scripts/python.exe",
-      "args": ["C:/path/to/SIMBIOLOGY-MCP/main.py"]
+      "args": ["-m", "simbiology_mcp", "start"]
     }
   }
 }
@@ -106,7 +106,7 @@ Start the server over stdio, either through the repo entry point or the installe
 
 ```powershell
 # from the repo
-.\.venv\Scripts\python.exe .\main.py
+.\.venv\Scripts\python.exe -m simbiology_mcp
 
 # or, after installation
 simbiology-mcp start
@@ -160,13 +160,16 @@ The server exposes the following MCP tools:
 ## Project layout
 
 ```text
-core/        SimBiology session, per-model reads, and command builders
-engine/      Singleton MATLAB engine wrapper and error types
-tools/       MCP tool definitions and the shared registry
-external/    PubMed and iGEM API wrappers
-interfaces/  FastMCP server wiring
-examples/    Runnable demos (e.g. demo_simulation.py)
-tests/       Unit tests plus MATLAB/live integration tests
+simbiology_mcp/
+├── core/        SimBiology session, per-model reads, and command builders
+├── engine/      Singleton MATLAB engine wrapper and error types
+├── tools/       MCP tool definitions and the shared registry
+├── external/    PubMed and iGEM API wrappers
+├── interfaces/  FastMCP server wiring
+├── scripts/     CLI helpers like setup and get-skill
+└── skills/      Packaged skill markdown
+examples/        Runnable demos (e.g. demo_simulation.py)
+tests/           Unit tests plus MATLAB/live integration tests
 ```
 
 ---

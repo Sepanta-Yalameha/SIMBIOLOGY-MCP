@@ -10,9 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from engine.matlab_layer import MatlabLayer
-from engine.exceptions import AutosaveError, MatlabError, ProjectNotLoadedError, ModelNotFoundError
-from core.sbio_model import SbioModel, to_matlab_string
+from ..engine.matlab_layer import MatlabLayer
+from ..engine.exceptions import AutosaveError, MatlabError, ProjectNotLoadedError, ModelNotFoundError
+from .sbio_model import SbioModel, to_matlab_string
 
 
 class SbioService:

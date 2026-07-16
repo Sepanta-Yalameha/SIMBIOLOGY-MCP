@@ -1,4 +1,4 @@
-"""Unit tests for the export tools (hermetic; no MATLAB engine).
+﻿"""Unit tests for the export tools (hermetic; no MATLAB engine).
 
 The export tools delegate simulation to ``SbioModel`` (``export_plot`` and
 ``simulate``); these tests use a dummy model to verify the tool-layer contract:
@@ -9,7 +9,7 @@ covered by the ``matlab``-marked tests.
 
 from __future__ import annotations
 
-import tools.sbio_tools as sbio_tools
+import simbiology_mcp.tools.sbio_tools as sbio_tools
 
 
 class DummyModel:
@@ -170,3 +170,4 @@ def test_export_csv_rejects_bad_header_lengths(monkeypatch):
         assert "data_columns" in str(exc)
     else:
         raise AssertionError("expected ValueError for mismatched data_columns")
+
