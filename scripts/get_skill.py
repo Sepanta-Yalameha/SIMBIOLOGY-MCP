@@ -189,20 +189,28 @@ def _select_client(*, read_key=_read_key, stream=None) -> str | None:
         _render_menu(title, labels, index, stream)
 
 
-def interactive_install(*, fallback: str = "print") -> None:
-    """Interactively pick a client and install the skill (user scope).
+def _install_for_client(client: str, scope: str) -> None:
+    _, target = _write_skill(_client_target(client, scope))
+    print(f"Installed {_CLIENT_LABELS[client]} skill to {target}")
 
-    When there is no interactive terminal, `fallback="print"` prints SKILL.md
-    (so `get-skill` stays pipeable) and `fallback="hint"` prints a short note on
-    how to install non-interactively.
+
+def interactive_install(*, scope: str = "user", fallback: str = "print") -> None:
+    """Pick a client with the arrow-key menu and install the skill at `scope`.
+
+    With no interactive terminal, `fallback` decides what happens: `"print"`
+    prints SKILL.md (so `get-skill` stays pipeable), `"hint"` prints a short note
+    on how to install non-interactively, and `"default"` installs for Claude Code
+    (used when install was explicitly requested but no agent could be chosen).
     """
 
     if not _is_interactive():
         if fallback == "hint":
             print(
-                "Skill not installed: no interactive terminal detected.\n" "Install it with `simbiology-mcp get-skill --install --client <claude-code|cursor|codex|windsurf|copilot>`.",
+                "Skill not installed: no interactive terminal detected. Install it with " "`simbiology-mcp get-skill --install --client <claude-code|cursor|codex|windsurf|copilot>`.",
                 file=sys.stderr,
             )
+        elif fallback == "default":
+            _install_for_client("claude-code", scope)
         else:
             print(_skill_text())
         return
@@ -212,8 +220,7 @@ def interactive_install(*, fallback: str = "print") -> None:
     if client is None:
         print("Skill installation cancelled.")
         return
-    _, target = _write_skill(_client_target(client, "user"))
-    print(f"Installed {_CLIENT_LABELS[client]} skill to {target}")
+    _install_for_client(client, scope)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -223,7 +230,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")
     parser.add_argument("--install", action="store_true", help="Install SKILL.md into the target client's skills directory (no prompt).")
-    parser.add_argument("--client", choices=sorted(_CLIENT_SKILL_DIRS), default="claude-code", help="Client to install for when using --install (default: claude-code).")
+    parser.add_argument("--client", choices=sorted(_CLIENT_SKILL_DIRS), default=None, help="Client to install for. Omit with --install to choose from the interactive menu.")
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--user", action="store_true", help="Install into the user-level skills directory (default).")
     scope.add_argument("--project", action="store_true", help="Install into the current project's skills directory.")
@@ -231,21 +238,22 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
-    do_install = args.install or args.install_path is not None
-
     if args.print_skill:
         print(_skill_text())
 
-    if do_install:
-        if args.install_path is not None:
-            _, target = _write_skill(Path(args.install_path))
-        else:
-            scope_name = "project" if args.project else "user"
-            _, target = _write_skill(_client_target(args.client, scope_name))
+    if args.install_path is not None:
+        _, target = _write_skill(Path(args.install_path))
         print(f"Installed skill to {target}")
-
-    if not args.print_skill and not do_install:
-        interactive_install(fallback="print")
+    elif args.install:
+        scope_name = "project" if args.project else "user"
+        if args.client is not None:
+            _install_for_client(args.client, scope_name)
+        else:
+            # No agent named: choose from the menu (or default to Claude Code
+            # when there is no interactive terminal), keeping the chosen scope.
+            interactive_install(scope=scope_name, fallback="default")
+    elif not args.print_skill:
+        interactive_install(scope="user", fallback="print")
 
 
 if __name__ == "__main__":

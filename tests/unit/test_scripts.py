@@ -135,7 +135,7 @@ def test_get_skill_install_user_scope(monkeypatch, capsys, tmp_path: Path) -> No
 
     target = tmp_path / ".claude" / "skills" / "simbiology-workflow" / "SKILL.md"
     assert target.read_text(encoding="utf-8") == get_skill._skill_text()
-    assert f"Installed skill to {target.resolve()}" in capsys.readouterr().out
+    assert f"Installed Claude Code skill to {target.resolve()}" in capsys.readouterr().out
 
 
 def test_get_skill_install_project_scope(monkeypatch, tmp_path: Path) -> None:
@@ -145,6 +145,30 @@ def test_get_skill_install_project_scope(monkeypatch, tmp_path: Path) -> None:
     get_skill.main()
 
     assert (tmp_path / ".cursor" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
+
+
+def test_get_skill_install_without_client_prompts_when_interactive(monkeypatch, tmp_path: Path) -> None:
+    # --install with a scope but no --client should still show the picker.
+    monkeypatch.setattr(get_skill, "_is_interactive", lambda: True)
+    monkeypatch.setattr(get_skill, "_enable_windows_ansi", lambda: None)
+    monkeypatch.setattr(get_skill, "_select_client", lambda **kwargs: "codex")
+    monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path)
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install", "--project"])
+
+    get_skill.main()
+
+    assert (tmp_path / ".agents" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
+
+
+def test_get_skill_install_without_client_defaults_when_not_interactive(monkeypatch, tmp_path: Path) -> None:
+    # Without a terminal to prompt in, --install with no --client falls back to Claude Code.
+    monkeypatch.setattr(get_skill, "_is_interactive", lambda: False)
+    monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--install"])
+
+    get_skill.main()
+
+    assert (tmp_path / ".claude" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
 
 
 def test_get_skill_install_rejects_unknown_client(monkeypatch) -> None:
