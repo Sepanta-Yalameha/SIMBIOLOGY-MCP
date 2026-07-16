@@ -197,6 +197,31 @@ Notes:
 - pH-style regulation should be framed in terms of `[H+]`, not informal “low pH vs high pH” language alone. If the system activates as pH drops, that means it is **H+-activated** because `[H+]` increases as pH decreases.
 - Heat-dependent and cold-dependent regulation use opposite logistic orientations; choose the sign that matches whether activity should increase with higher temperature or lower temperature.
 
+## Units Summary
+There are several unit types in SimBiology. Use the correct units for each species, parameter, dose, and reaction, and keep every rate law dimensionally consistent.
+
+Rule of thumb:
+
+- Use **amount** units for discrete counts or total substance, such as `mole`, `mmole`, or `umole`.
+- Use **concentration** units for species in a compartment, such as `mole/liter`, `molarity`, or `uM`.
+- Use **volume** units for compartments, such as `liter`, `m^3`, or `ml`.
+- Use **time** units for simulation time and kinetic time constants, such as `second`, `minute`, or `hour`.
+- Use **rate** units that match the quantity being changed per time, such as `mole/second`, `molarity/hour`, or `liter/second`.
+- Use **dimensionless** units for pure ratios, probabilities, fractions, and Hill-like terms.
+
+Common SimBiology patterns:
+
+| Item | Typical unit family | Examples | Dimension check |
+| --- | --- | --- | --- |
+| Species initial amount | Amount or concentration | `mole`, `molarity`, `uM` | Match the species representation used in the compartment. |
+| Compartment capacity | Volume | `liter`, `ml` | Must be a volume-like unit. |
+| Parameter value | Depends on the formula | `1/second`, `liter/(mole*second)`, `dimensionless` | Units must make the full rate law balance. |
+| Reaction rate | Quantity per time | `mole/second`, `molarity/minute` | The left and right sides of the reaction must imply the same overall units. |
+| Dose amount | Amount or mass | `mole`, `milligram` | Do not use concentration units for a dose amount. |
+| Dose rate | Amount/time or mass/time | `mole/second`, `milligram/hour` | Do not use concentration-based units for a dose rate. |
+
+If a reaction uses concentration species in a volume compartment, check that the kinetic law converts cleanly between amount and concentration. If the rate looks wrong, fix the reaction topology or parameter dimensions rather than forcing units to fit.
+
 ## Tool Summary
 
 The MCP exposes the following tool groups:
