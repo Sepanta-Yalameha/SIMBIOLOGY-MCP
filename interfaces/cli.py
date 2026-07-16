@@ -13,9 +13,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("start", help="Start the SimBiology MCP server.")
 
-    get_skill_parser = subparsers.add_parser("get-skill", help="Print or copy the packaged skill.")
+    get_skill_parser = subparsers.add_parser("get-skill", help="Install or print the packaged skill (interactive picker with no flags).")
     get_skill_parser.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")
-    get_skill_parser.add_argument("--install-path", help="Write SKILL.md to the given destination path instead of printing it.")
+    get_skill_parser.add_argument("--install", action="store_true", help="Install SKILL.md into a client's skills directory (pass --client to skip the picker).")
+    get_skill_parser.add_argument("--client", choices=sorted(get_skill._CLIENT_SKILL_DIRS), help="Client to install for. Omit with --install to pick from the interactive menu.")
+    get_skill_scope = get_skill_parser.add_mutually_exclusive_group()
+    get_skill_scope.add_argument("--user", action="store_true", help="Install into the user-level skills directory (default).")
+    get_skill_scope.add_argument("--project", action="store_true", help="Install into the current project's skills directory.")
+    get_skill_parser.add_argument("--install-path", help="Install to an explicit path instead of a client skills directory.")
 
     setup_parser = subparsers.add_parser("setup", help="Install MATLAB Engine for Python from a local MATLAB installation.")
     setup_parser.add_argument("--matlab-root")
@@ -43,7 +48,7 @@ def main() -> None:
         return
 
     if args.command == "get-skill":
-        get_skill.main(["--print"] if args.print_skill and args.install_path is None else _get_skill_argv(args))
+        get_skill.main(_get_skill_argv(args))
         return
 
     if args.command == "setup":
@@ -57,6 +62,14 @@ def _get_skill_argv(args: argparse.Namespace) -> list[str]:
     argv: list[str] = []
     if args.print_skill:
         argv.append("--print")
+    if args.install:
+        argv.append("--install")
+    if args.client is not None:
+        argv.extend(["--client", args.client])
+    if args.project:
+        argv.append("--project")
+    elif args.user:
+        argv.append("--user")
     if args.install_path is not None:
         argv.extend(["--install-path", args.install_path])
     return argv

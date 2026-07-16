@@ -24,7 +24,7 @@ def run() -> None:
         import matlab.engine
     except ImportError:
         print(
-            "MATLAB Engine for Python is not installed.\nRun `simbiology-mcp-setup` to install it from your local MATLAB installation.",
+            "MATLAB Engine for Python is not installed.\nRun `simbiology-mcp setup` to install it from your local MATLAB installation.",
             file=sys.stderr,
         )
         sys.exit(1)
