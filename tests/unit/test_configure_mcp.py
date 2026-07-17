@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import tomllib
 from pathlib import Path
 
@@ -74,15 +75,60 @@ def test_configure_codex_writes_toml(monkeypatch, tmp_path: Path) -> None:
     assert data["mcp_servers"]["simbiology"]["args"] == ["-m", "simbiology_mcp", "start"]
 
 
-def test_resolve_client_executable_prefers_pathext_shim(monkeypatch) -> None:
-    # Windows ships client CLIs as a .cmd/.bat shim next to an extensionless
-    # shell script. Only the shim is spawnable, so the bare match must not win.
-    available = {"code": r"C:\VSCode\bin\code", "code.CMD": r"C:\VSCode\bin\code.cmd"}
-    monkeypatch.setattr(configure_mcp.os, "name", "nt")
-    monkeypatch.setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
-    monkeypatch.setattr(configure_mcp.shutil, "which", lambda name: available.get(name))
+windows_only = pytest.mark.skipif(os.name != "nt", reason="PATHEXT resolution is Windows-specific")
 
-    assert configure_mcp.resolve_client_executable("code") == r"C:\VSCode\bin\code.cmd"
+
+def _assert_same_path(actual: str | None, expected: Path) -> None:
+    # PATHEXT is conventionally uppercase, so the resolved extension may not match
+    # the file's own casing. Windows does not care, and neither should this.
+    assert actual is not None
+    assert actual.casefold() == str(expected).casefold()
+
+
+@windows_only
+def test_resolve_client_executable_prefers_pathext_shim_over_bare_script(monkeypatch, tmp_path: Path) -> None:
+    # Real files, because the bug was in shutil.which's real behaviour: VS Code
+    # ships an extensionless shell script beside code.cmd, and which() returns
+    # the script, which is unspawnable (WinError 193).
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "code").write_text("#!/bin/sh\n", encoding="utf-8")
+    (bin_dir / "code.cmd").write_text("@echo off\n", encoding="utf-8")
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+
+    _assert_same_path(configure_mcp.resolve_client_executable("code"), bin_dir / "code.cmd")
+
+
+@windows_only
+def test_resolve_client_executable_takes_the_earlier_directory(monkeypatch, tmp_path: Path) -> None:
+    # Windows resolves a bare command directory-first: an earlier directory wins
+    # whatever its extension. Probing each extension across the whole PATH would
+    # let this stray .exe beat the real .cmd, because .EXE precedes .CMD.
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / "code.cmd").write_text("@echo off\n", encoding="utf-8")
+    (second / "code.exe").write_bytes(b"MZ")
+    monkeypatch.setenv("PATH", os.pathsep.join([str(first), str(second)]))
+    monkeypatch.setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+
+    _assert_same_path(configure_mcp.resolve_client_executable("code"), first / "code.cmd")
+
+
+@windows_only
+def test_resolve_client_executable_survives_empty_pathext(monkeypatch, tmp_path: Path) -> None:
+    # PATHEXT set-but-empty must still fall back to the defaults, or nothing is
+    # ever probed and the unspawnable bare name wins again.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "code").write_text("#!/bin/sh\n", encoding="utf-8")
+    (bin_dir / "code.cmd").write_text("@echo off\n", encoding="utf-8")
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setenv("PATHEXT", "")
+
+    _assert_same_path(configure_mcp.resolve_client_executable("code"), bin_dir / "code.cmd")
 
 
 def test_resolve_client_executable_falls_back_to_bare_name(monkeypatch) -> None:
@@ -92,12 +138,44 @@ def test_resolve_client_executable_falls_back_to_bare_name(monkeypatch) -> None:
     assert configure_mcp.resolve_client_executable("code") == "/usr/bin/code"
 
 
-def test_resolve_client_executable_missing_returns_none(monkeypatch) -> None:
-    monkeypatch.setattr(configure_mcp.os, "name", "nt")
-    monkeypatch.setenv("PATHEXT", ".EXE;.CMD")
+def test_resolve_client_executable_missing_returns_none(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.setattr(configure_mcp.shutil, "which", lambda name: None)
 
     assert configure_mcp.resolve_client_executable("codex") is None
+
+
+@windows_only
+@pytest.mark.parametrize("metacharacter", ["&", "|", "<", ">", "^"])
+def test_batch_launcher_refuses_cmd_metacharacters(tmp_path: Path, metacharacter: str) -> None:
+    # cmd.exe would execute these rather than pass them along, so a venv under
+    # e.g. C:\R&D must fail loudly rather than be handed to a .cmd launcher.
+    launcher = tmp_path / "code.cmd"
+    launcher.write_text("@echo off\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as excinfo:
+        configure_mcp._reject_unsafe_batch_arguments(str(launcher), ["code", "--add-mcp", rf"C:\R{metacharacter}D\sim.exe"])
+
+    assert "cmd.exe" in str(excinfo.value)
+
+
+@windows_only
+def test_batch_launcher_allows_ordinary_payloads(tmp_path: Path) -> None:
+    # The --add-mcp payload always contains quotes and backslashes; only cmd
+    # metacharacters are a problem, so this must not become a false refusal.
+    launcher = tmp_path / "code.cmd"
+    launcher.write_text("@echo off\n", encoding="utf-8")
+    payload = json.dumps({"name": "simbiology", "command": r"C:\Program Files (x86)\py\sim.exe", "args": ["start"]})
+
+    configure_mcp._reject_unsafe_batch_arguments(str(launcher), ["code", "--add-mcp", payload])
+
+
+def test_exe_launcher_is_not_subject_to_cmd_rules(tmp_path: Path) -> None:
+    # An .exe is spawned directly, so cmd.exe never sees the arguments.
+    launcher = tmp_path / "claude.exe"
+    launcher.write_bytes(b"MZ")
+
+    configure_mcp._reject_unsafe_batch_arguments(str(launcher), ["claude", "mcp", "add", r"C:\R&D\sim.exe"])
 
 
 def test_merge_json_server_reads_config_with_bom(tmp_path: Path) -> None:
@@ -162,11 +240,16 @@ def test_configure_vscode_project_declares_stdio_type(monkeypatch, tmp_path: Pat
     }
 
 
-def _record_native(monkeypatch) -> list[list[str]]:
+def _record_native(monkeypatch, *, fail_add_with: str | None = None) -> list[list[str]]:
+    """Record every native command, optionally making the first `add` refuse."""
+
     calls: list[list[str]] = []
 
     def fake_run(command, *, dry_run, check=True):
         calls.append(command)
+        is_add = "add" in command or "--add-mcp" in command
+        if is_add and fail_add_with and not any("add" in c or "--add-mcp" in c for c in calls[:-1]):
+            raise SystemExit(fail_add_with)
         return True
 
     monkeypatch.setattr(configure_mcp, "resolve_server_launch", lambda: ("sim.exe", ["start"]))
@@ -174,36 +257,69 @@ def _record_native(monkeypatch) -> list[list[str]]:
     return calls
 
 
-def test_native_add_without_force_does_not_remove(monkeypatch) -> None:
-    calls = _record_native(monkeypatch)
-
-    configure_mcp.configure_client("claude-code", scope="user", force=False, dry_run=False)
-
-    assert len(calls) == 1
-    assert calls[0][:3] == ["claude", "mcp", "add"]
-
-
-def test_force_removes_existing_entry_before_native_add(monkeypatch) -> None:
-    # `claude mcp add` refuses to overwrite, so --force has to remove first.
+def test_native_add_on_a_fresh_machine_never_removes(monkeypatch) -> None:
+    # Nothing is configured yet, so a remove would be pointless and its failure
+    # would be the only thing standing between the user and a working install.
     calls = _record_native(monkeypatch)
 
     configure_mcp.configure_client("claude-code", scope="user", force=True, dry_run=False)
 
-    assert [c[:3] for c in calls] == [["claude", "mcp", "remove"], ["claude", "mcp", "add"]]
+    assert [c[:3] for c in calls] == [["claude", "mcp", "add"]]
 
 
-def test_force_warns_when_client_cannot_remove(monkeypatch, capsys) -> None:
-    calls = _record_native(monkeypatch)
+def test_force_removes_only_after_the_add_is_refused(monkeypatch) -> None:
+    calls = _record_native(monkeypatch, fail_add_with="MCP server simbiology already exists")
 
-    configure_mcp.configure_client("vscode", scope="user", force=True, dry_run=False)
+    configure_mcp.configure_client("claude-code", scope="user", force=True, dry_run=False)
+
+    # Add first: a remove that ran before a doomed add would leave nothing behind.
+    assert [c[:3] for c in calls] == [
+        ["claude", "mcp", "add"],
+        ["claude", "mcp", "remove"],
+        ["claude", "mcp", "add"],
+    ]
+
+
+def test_existing_entry_without_force_is_left_alone(monkeypatch) -> None:
+    calls = _record_native(monkeypatch, fail_add_with="MCP server simbiology already exists")
+
+    with pytest.raises(SystemExit) as excinfo:
+        configure_mcp.configure_client("claude-code", scope="user", force=False, dry_run=False)
+
+    assert [c[:3] for c in calls] == [["claude", "mcp", "add"]]
+    assert "--force" in str(excinfo.value)
+
+
+def test_force_reports_when_client_cannot_remove(monkeypatch, capsys) -> None:
+    calls = _record_native(monkeypatch, fail_add_with="server already exists")
+
+    with pytest.raises(SystemExit) as excinfo:
+        configure_mcp.configure_client("vscode", scope="user", force=True, dry_run=False)
 
     assert len(calls) == 1
-    assert "--force has no effect" in capsys.readouterr().err
+    assert "no command to remove" in str(excinfo.value)
+    # Nothing was written, so nothing may be claimed.
+    assert "File modified" not in capsys.readouterr().out
+
+
+def test_native_clients_are_not_given_a_guessed_path(monkeypatch, capsys) -> None:
+    # These clients pick their own file and honour relocations we do not track,
+    # so naming one would sometimes be a lie.
+    _record_native(monkeypatch)
+
+    configure_mcp.configure_client("claude-code", scope="user", force=False, dry_run=False)
+
+    out = capsys.readouterr().out
+    assert "Added the simbiology MCP server for Claude Code (user scope)." in out
+    assert "File modified" not in out
+
+
+_CLAUDE_CHATTER = "Added stdio MCP server simbiology with command: C:\\repo\\sim.exe start to project config"
 
 
 class _FakeCompleted:
     returncode = 0
-    stdout = "Added stdio MCP server simbiology with command: C:\\repo\\sim.exe start to project config"
+    stdout = _CLAUDE_CHATTER
     stderr = ""
 
 
@@ -211,10 +327,11 @@ def test_native_client_chatter_is_not_relayed(monkeypatch, capsys, tmp_path: Pat
     # `claude mcp add` narrates the run in its own format and echoes the whole
     # server command back. Report the outcome ourselves instead of relaying it,
     # so every client reads the same.
-    kwargs_seen: dict[str, object] = {}
-
     def fake_run(command, **kwargs):
-        kwargs_seen.update(kwargs)
+        # Stand in for a child that inherited the terminal: if the output is not
+        # captured, its chatter lands on our stdout for real.
+        if not kwargs.get("capture_output"):
+            print(_CLAUDE_CHATTER)
         return _FakeCompleted()
 
     monkeypatch.chdir(tmp_path)
@@ -226,9 +343,27 @@ def test_native_client_chatter_is_not_relayed(monkeypatch, capsys, tmp_path: Pat
 
     out = capsys.readouterr().out
     assert "Added the simbiology MCP server for Claude Code (project scope)." in out
-    assert "File modified:" in out
     assert "with command" not in out
-    assert kwargs_seen.get("capture_output") is True
+
+
+def test_native_client_errors_are_stripped_of_colour(monkeypatch, tmp_path: Path) -> None:
+    # Clients colour their output even when piped, so the escapes would reach a
+    # plain console as literal junk.
+    class _Failed:
+        returncode = 1
+        stdout = ""
+        stderr = "\x1b[31mMCP server simbiology already exists\x1b[39m"
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(configure_mcp, "resolve_server_launch", lambda: ("sim.exe", ["start"]))
+    monkeypatch.setattr(configure_mcp, "resolve_client_executable", lambda name: rf"C:\bin\{name}.exe")
+    monkeypatch.setattr(configure_mcp.subprocess, "run", lambda command, **kwargs: _Failed())
+
+    with pytest.raises(SystemExit) as excinfo:
+        configure_mcp.configure_client("claude-code", scope="project", force=False, dry_run=False)
+
+    assert "\x1b[" not in str(excinfo.value)
+    assert "already exists" in str(excinfo.value)
 
 
 def test_file_writing_client_reports_the_same_way(monkeypatch, capsys, tmp_path: Path) -> None:
@@ -318,18 +453,26 @@ def test_interactive_configure_hints_without_a_terminal(monkeypatch, capsys) -> 
     assert "--client" in capsys.readouterr().err
 
 
-def _stub_pickers(monkeypatch, *, client: str | None, scope: str | None) -> list[dict]:
+def _stub_pickers(monkeypatch, *, client: str | None, scope: str | None) -> tuple[list[dict], list[dict]]:
+    """Stub both pickers. Returns (configure_client calls, _select_scope kwargs)."""
+
     seen: list[dict] = []
+    scope_kwargs: list[dict] = []
+
+    def fake_select_scope(**kwargs):
+        scope_kwargs.append(kwargs)
+        return scope
+
     monkeypatch.setattr(configure_mcp, "_is_interactive", lambda: True)
     monkeypatch.setattr(configure_mcp, "_enable_windows_ansi", lambda: None)
     monkeypatch.setattr(configure_mcp, "_select_client", lambda **kwargs: client)
-    monkeypatch.setattr(configure_mcp, "_select_scope", lambda **kwargs: scope)
+    monkeypatch.setattr(configure_mcp, "_select_scope", fake_select_scope)
     monkeypatch.setattr(configure_mcp, "configure_client", lambda name, **kwargs: seen.append({"client": name, **kwargs}))
-    return seen
+    return seen, scope_kwargs
 
 
 def test_interactive_configure_cancelling_the_client_picker_configures_nothing(monkeypatch, capsys) -> None:
-    seen = _stub_pickers(monkeypatch, client=None, scope="user")
+    seen, _ = _stub_pickers(monkeypatch, client=None, scope="user")
 
     configure_mcp.interactive_configure()
 
@@ -338,7 +481,7 @@ def test_interactive_configure_cancelling_the_client_picker_configures_nothing(m
 
 
 def test_interactive_configure_cancelling_the_scope_picker_configures_nothing(monkeypatch, capsys) -> None:
-    seen = _stub_pickers(monkeypatch, client="cursor", scope=None)
+    seen, _ = _stub_pickers(monkeypatch, client="cursor", scope=None)
 
     configure_mcp.interactive_configure()
 
@@ -347,11 +490,21 @@ def test_interactive_configure_cancelling_the_scope_picker_configures_nothing(mo
 
 
 def test_interactive_configure_passes_choices_and_flags_through(monkeypatch) -> None:
-    seen = _stub_pickers(monkeypatch, client="cursor", scope="project")
+    seen, _ = _stub_pickers(monkeypatch, client="cursor", scope="project")
 
     configure_mcp.interactive_configure(force=True, dry_run=True)
 
     assert seen == [{"client": "cursor", "scope": "project", "force": True, "dry_run": True}]
+
+
+def test_interactive_configure_forwards_preferred_scope_to_the_picker(monkeypatch) -> None:
+    # `configure --project` reaches the scope picker only through this argument;
+    # dropping it would silently ignore the flag.
+    _, scope_kwargs = _stub_pickers(monkeypatch, client="cursor", scope="project")
+
+    configure_mcp.interactive_configure(preferred_scope="project")
+
+    assert scope_kwargs == [{"client": "cursor", "preferred_scope": "project"}]
 
 
 def test_replace_prompt_declined_leaves_config_untouched(monkeypatch, tmp_path: Path) -> None:

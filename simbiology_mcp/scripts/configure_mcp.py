@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -68,24 +69,44 @@ def resolve_server_launch() -> tuple[str, list[str]]:
     return str(python), ["-m", "simbiology_mcp", "start"]
 
 
+_DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD"
+
+# Client CLIs colour their output even when it is piped, so relayed errors would
+# otherwise arrive as escape sequences on a plain console.
+_ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_PATTERN.sub("", text)
+
+
 def resolve_client_executable(name: str) -> str | None:
     """Resolve a client CLI name to a path `subprocess` can actually spawn.
 
     Client CLIs ship as script shims on Windows rather than real executables
     (`code.cmd`, `copilot.bat`), and CreateProcess only ever appends `.exe`, so a
     bare name fails with WinError 2. A plain `shutil.which(name)` is not enough
-    either: it can match an extensionless shell script sitting beside the shim,
-    which then fails with WinError 193. Probe the PATHEXT variants first so the
-    real shim wins, and only fall back to the bare name.
+    either: it matches an extensionless shell script sitting beside the shim,
+    which then fails with WinError 193.
+
+    Walk directories first and extensions second, which is the order Windows
+    itself resolves a bare command in: an earlier directory always wins, whatever
+    its extension. Probing every directory per extension instead would let a
+    stray `code.exe` late on PATH beat the real `code.cmd` early on it.
     """
-    if os.name == "nt":
-        for ext in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(os.pathsep):
-            ext = ext.strip()
-            if not ext:
-                continue
-            found = shutil.which(name + ext)
-            if found:
-                return found
+    if os.name != "nt":
+        return shutil.which(name)
+
+    # `or` rather than a get() default: PATHEXT set-but-empty must fall back too,
+    # otherwise no extension is ever tried and we are back to WinError 193.
+    extensions = [ext.strip() for ext in (os.environ.get("PATHEXT") or _DEFAULT_PATHEXT).split(os.pathsep) if ext.strip()]
+    for directory in (os.environ.get("PATH") or "").split(os.pathsep):
+        if not directory:
+            continue
+        for extension in extensions:
+            candidate = Path(directory) / (name + extension)
+            if candidate.is_file():
+                return str(candidate)
     return shutil.which(name)
 
 
@@ -162,23 +183,32 @@ def _render_native_remove_command(client: str, scope: str) -> list[str] | None:
 
 
 def _run_native_configure(client: str, scope: str, *, force: bool, dry_run: bool) -> str:
-    if force:
+    """Register with a client through its own CLI.
+
+    Adds first and only removes if the add is refused, so a failed --force can
+    never leave the user with no entry at all: unlike the files written here,
+    a client's own config gets no .bak to fall back on. It also keeps the
+    pointless remove off machines that have nothing configured yet.
+    """
+    add = _render_native_command(client, scope)
+    try:
+        _run_native(add, dry_run=dry_run)
+        return DRY_RUN if dry_run else WRITTEN
+    except SystemExit as exc:
+        message = str(exc)
+        if "already exists" not in message.casefold():
+            raise
+        if not force:
+            # Say what the files written here already say, rather than leaving
+            # the client's own wording as the only guidance.
+            raise SystemExit(f"{message}\nRe-run with --force to replace it.") from exc
         remove = _render_native_remove_command(client, scope)
         if remove is None:
-            print(f"--force has no effect for {_CLIENT_LABELS[client]}: its CLI cannot remove an existing entry.", file=sys.stderr)
-        else:
-            # The entry may not exist yet, so a failure here is expected and fine.
-            _run_native(remove, dry_run=dry_run, check=False)
-    try:
-        _run_native(_render_native_command(client, scope), dry_run=dry_run)
-    except SystemExit as exc:
-        # Clients that own their config refuse to overwrite rather than merge, so
-        # point at --force the way the files we write ourselves already do.
-        message = str(exc)
-        if not force and "already exists" in message.casefold():
-            raise SystemExit(f"{message}\nRe-run with --force to replace it.") from exc
-        raise
-    return DRY_RUN if dry_run else WRITTEN
+            raise SystemExit(f"{message}\n--force cannot replace it: {_CLIENT_LABELS[client]} has no command to remove an entry. Edit its configuration by hand.") from exc
+
+    _run_native(remove, dry_run=dry_run)
+    _run_native(add, dry_run=dry_run)
+    return WRITTEN
 
 
 def _confirm_replace(path: Path, label: str) -> bool:
@@ -297,6 +327,38 @@ def _configure_json(client: str, scope: str, *, force: bool, dry_run: bool, root
     return merge_json_server(path, root_key=root_key, server_name=SERVER_NAME, server_config=_server_config(server_type=server_type), force=force, dry_run=dry_run)
 
 
+_BATCH_SUFFIXES = (".bat", ".cmd")
+
+# Live syntax to cmd.exe. `"` is deliberately absent: it is what desyncs the
+# quoting rather than what exploits it, and every --add-mcp payload contains it.
+_CMD_METACHARACTERS = "&|<>^"
+
+# Client CLIs may block on a prompt we would never see, so cap the wait.
+_NATIVE_TIMEOUT_SECONDS = 120
+
+
+def _reject_unsafe_batch_arguments(executable: str, command: list[str]) -> None:
+    """Refuse to hand cmd.exe metacharacters it would execute.
+
+    A .bat/.cmd launcher is run by cmd.exe, so its command line is parsed twice:
+    by cmd.exe, then by the program using MSVCRT rules. subprocess quotes for the
+    second parse only, escaping `"` as `\\"`, which cmd.exe does not honour. Quote
+    state desyncs and any metacharacter left in the line becomes live syntax
+    (CVE-2024-3566, "BatBadBut") -- a path like C:\\R&D\\.venv would both break the
+    call and be executable. Quoting correctly around a double parse is famously
+    unreliable, so refuse instead of risking it.
+    """
+    if os.name != "nt" or not executable.casefold().endswith(_BATCH_SUFFIXES):
+        return
+    for argument in command[1:]:
+        found = [character for character in _CMD_METACHARACTERS if character in argument]
+        if found:
+            raise SystemExit(
+                f"Cannot configure {Path(executable).name} safely: an argument contains {' '.join(found)}, "
+                f"which cmd.exe would execute rather than pass along.\nConfigure this client by hand instead."
+            )
+
+
 def _run_native(command: list[str], *, dry_run: bool, check: bool = True) -> bool:
     """Run a client's own CLI. Returns True when the command succeeded.
 
@@ -306,32 +368,46 @@ def _run_native(command: list[str], *, dry_run: bool, check: bool = True) -> boo
     failure the captured text is surfaced so the real error is not swallowed.
     """
     if dry_run:
-        print(" ".join(shlex.quote(part) for part in command))
+        print(subprocess.list2cmdline(command) if os.name == "nt" else " ".join(shlex.quote(part) for part in command))
         return True
     executable = resolve_client_executable(command[0])
     if executable is None:
         raise SystemExit(f"Could not find '{command[0]}' on PATH. Install it, or configure this client by hand.")
+    _reject_unsafe_batch_arguments(executable, command)
     try:
-        result = subprocess.run([executable, *command[1:]], capture_output=True, text=True)
+        # stdin is closed rather than inherited: with output captured, a CLI that
+        # prompted would block on input while its question sat unread in a pipe.
+        result = subprocess.run([executable, *command[1:]], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=_NATIVE_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired as exc:
+        raise SystemExit(f"{command[0]} did not finish within {_NATIVE_TIMEOUT_SECONDS}s. Configure this client by hand.") from exc
     except OSError as exc:
         raise SystemExit(f"Could not run {command[0]}: {exc}") from exc
     if result.returncode == 0:
         return True
     if not check:
         return False
-    detail = (result.stderr or result.stdout or "").strip()
+    detail = _strip_ansi((result.stderr or result.stdout or "").strip())
     failure = f"{command[0]} failed with exit code {result.returncode}."
     raise SystemExit(f"{failure}\n{detail}" if detail else failure)
+
+
+def _writes_own_file(client: str, scope: str) -> bool:
+    """Whether we edit this client's config ourselves rather than call its CLI."""
+
+    if client in {"cursor", "windsurf"}:
+        return True
+    return client in {"codex", "vscode"} and scope == "project"
 
 
 def _display_path(client: str, scope: str) -> Path | None:
     """Config file to name in the result, when we can name it honestly.
 
-    VS Code's user-scope config lives inside its user-profile directory, whose
-    location VS Code documents only as a command (`MCP: Open User Configuration`)
-    and not as a path, so nothing is claimed for that one combination.
+    Only claimed for configs written here. The clients configured through their
+    own CLI choose where to write, and honour relocations we do not track
+    (CLAUDE_CONFIG_DIR, CODEX_HOME), so naming a path for them would be a guess
+    that is sometimes simply wrong.
     """
-    if client == "vscode" and scope == "user":
+    if not _writes_own_file(client, scope):
         return None
     return _path_for_client(client, scope)
 
@@ -349,6 +425,8 @@ def _announce(client: str, scope: str, status: str) -> None:
         path = _display_path(client, scope)
         if path is not None:
             print(f"File modified: {path}")
+        return
+    raise AssertionError(f"unhandled configuration status {status!r}")
 
 
 def _apply_client_config(client: str, scope: str, *, force: bool, dry_run: bool) -> str:
