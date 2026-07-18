@@ -146,6 +146,21 @@ def test_resolve_client_executable_missing_returns_none(monkeypatch, tmp_path: P
 
 
 @windows_only
+def test_resolve_client_executable_ignores_bare_script_when_no_shim(monkeypatch, tmp_path: Path) -> None:
+    # A bare, extensionless script with no .cmd/.exe shim beside it is unspawnable
+    # (WinError 193). With nothing spawnable on PATH we must return None so the
+    # caller reports a clean "not on PATH" error, rather than fall back to
+    # shutil.which and hand back the very script this resolver exists to reject.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "code").write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+
+    assert configure_mcp.resolve_client_executable("code") is None
+
+
+@windows_only
 @pytest.mark.parametrize("metacharacter", ["&", "|", "<", ">", "^"])
 def test_batch_launcher_refuses_cmd_metacharacters(tmp_path: Path, metacharacter: str) -> None:
     # cmd.exe would execute these rather than pass them along, so a venv under

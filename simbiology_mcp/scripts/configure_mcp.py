@@ -107,7 +107,10 @@ def resolve_client_executable(name: str) -> str | None:
             candidate = Path(directory) / (name + extension)
             if candidate.is_file():
                 return str(candidate)
-    return shutil.which(name)
+    # Nothing spawnable on PATH. Return None so the caller reports a clean
+    # "not on PATH" message; falling back to shutil.which here would hand back
+    # the extensionless script this resolver exists to reject (WinError 193).
+    return None
 
 
 def _user_root() -> Path:
