@@ -69,7 +69,9 @@ simbiology-mcp setup
 
 Then point your MCP client at the installed `simbiology-mcp` command with the `start` subcommand (see [Wiring into an MCP client](#wiring-into-an-mcp-client)).
 
-`simbiology-mcp setup` finishes by offering to install the packaged workflow skill: it shows an interactive menu where you pick your agent (Claude Code, Cursor, Codex, Windsurf, GitHub Copilot) with the arrow keys, then writes `SKILL.md` into that agent's skills directory. You can re-run the picker any time:
+`simbiology-mcp setup` installs MATLAB Engine for Python and can optionally configure an MCP client in the same run. Use `simbiology-mcp configure` when you only want to write client configuration.
+
+The skill installer stays separate:
 
 ```powershell
 simbiology-mcp get-skill
@@ -93,7 +95,29 @@ python -m pip install simbiology-mcp
 simbiology-mcp setup
 ```
 
-`setup` will offer to install the skill; run `simbiology-mcp get-skill` again later to re-open the picker.
+`setup` installs MATLAB Engine for Python. Add `--client`, `--user`, or `--project` if you also want it to write client configuration, or run `simbiology-mcp configure` later.
+
+### Configure an MCP client
+
+Use `simbiology-mcp configure` to write the MCP server entry for a specific client:
+
+```powershell
+simbiology-mcp configure --client cursor
+simbiology-mcp configure --client codex --project
+simbiology-mcp configure --list-clients
+```
+
+If the installed `simbiology-mcp` command is available, configuration points clients at that executable. Otherwise it falls back to `python -m simbiology_mcp start`.
+
+### Get the workflow skill
+
+The workflow skill installer stays separate from MCP configuration:
+
+```powershell
+simbiology-mcp get-skill
+```
+
+Use `--client`, `--project`, `--user`, or `--install-path` to choose a destination directly.
 
 ---
 
@@ -113,7 +137,7 @@ Start the server over stdio, either through the repo entry point or the installe
 
 ```powershell
 # from the repo
-.\.venv\Scripts\python.exe -m simbiology_mcp
+.\.venv\Scripts\python.exe -m simbiology_mcp start
 
 # or, after installation
 simbiology-mcp start
@@ -173,7 +197,7 @@ simbiology_mcp/
 ├── tools/       MCP tool definitions and the shared registry
 ├── external/    PubMed and iGEM API wrappers
 ├── interfaces/  FastMCP server wiring
-├── scripts/     CLI helpers like setup and get-skill
+├── scripts/     CLI helpers like setup, configure, and get-skill
 └── skills/      Packaged skill markdown
 examples/        Runnable demos (e.g. demo_simulation.py)
 tests/           Unit tests plus MATLAB/live integration tests

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import simbiology_mcp.scripts.configure_mcp as configure_mcp
 from simbiology_mcp.interfaces import cli
 from simbiology_mcp.scripts import get_skill, setup, tui
 
@@ -212,6 +213,39 @@ def test_select_client_wraps_up_and_cancels() -> None:
     assert cancelled is None
 
 
+def test_scope_label_shows_install_paths(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path / "repo")
+    target = tmp_path / "repo" / ".agents" / "skills" / "simbiology-workflow" / "SKILL.md"
+
+    assert get_skill._scope_label("codex", "project") == f"Project - {target}"
+
+
+def test_select_install_target_uses_selected_scope(monkeypatch, tmp_path: Path) -> None:
+    import io
+
+    monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path / "home")
+    monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path / "repo")
+
+    target = get_skill._select_install_target(client="codex", read_key=_fake_keys(["down", "enter"]), stream=io.StringIO())
+
+    assert target == tmp_path / "repo" / ".agents" / "skills" / "simbiology-workflow" / "SKILL.md"
+
+
+def test_select_install_target_accepts_custom_path(tmp_path: Path) -> None:
+    import io
+
+    target = tmp_path / "custom-skill.md"
+
+    chosen = get_skill._select_install_target(
+        client="codex",
+        read_key=_fake_keys(["down", "down", "enter"]),
+        stream=io.StringIO(),
+        input_func=lambda prompt="": str(target),
+    )
+
+    assert chosen == target
+
+
 def test_interactive_install_non_tty_prints_skill(monkeypatch, capsys) -> None:
     monkeypatch.setattr(get_skill, "_is_interactive", lambda: False)
 
@@ -234,10 +268,29 @@ def test_interactive_install_writes_selected_client(monkeypatch, capsys, tmp_pat
     monkeypatch.setattr(get_skill, "_select_client", lambda **kwargs: "windsurf")
     monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
 
-    get_skill.interactive_install()
+    get_skill.interactive_install(scope="user")
 
     assert (tmp_path / ".codeium" / "windsurf" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
     assert "Installed" in capsys.readouterr().out
+
+
+def test_interactive_install_prompts_for_missing_scope(monkeypatch, capsys, tmp_path: Path) -> None:
+    seen: list[dict] = []
+
+    def fake_select_install_target(**kwargs):
+        seen.append(kwargs)
+        return tmp_path / "SKILL.md"
+
+    monkeypatch.setattr(get_skill, "_is_interactive", lambda: True)
+    monkeypatch.setattr(get_skill, "_enable_windows_ansi", lambda: None)
+    monkeypatch.setattr(get_skill, "_select_client", lambda **kwargs: "codex")
+    monkeypatch.setattr(get_skill, "_select_install_target", fake_select_install_target)
+
+    get_skill.interactive_install()
+
+    assert seen == [{"client": "codex", "scope": None}]
+    assert (tmp_path / "SKILL.md").exists()
+    assert str(tmp_path / "SKILL.md") in capsys.readouterr().out
 
 
 def test_interactive_install_cancelled(monkeypatch, capsys, tmp_path: Path) -> None:
@@ -321,12 +374,22 @@ def test_cli_get_skill_forwards_user_scope(monkeypatch) -> None:
 
 def test_cli_setup_dispatches(monkeypatch) -> None:
     called: list[list[str]] = []
-    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "setup", "--matlab-index", "1"])
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "setup", "--matlab-index", "1", "--client", "codex", "--project"])
     monkeypatch.setattr(setup, "main", lambda argv=None: called.append(argv or []))
 
     cli.main()
 
-    assert called == [["--matlab-index", "1"]]
+    assert called == [["--matlab-index", "1", "--client", "codex", "--project"]]
+
+
+def test_cli_configure_dispatches(monkeypatch) -> None:
+    called: list[list[str]] = []
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp", "configure", "--client", "codex"])
+    monkeypatch.setattr(configure_mcp, "main", lambda argv=None: called.append(argv or []))
+
+    cli.main()
+
+    assert called == [["--client", "codex"]]
 
 
 def test_tui_select_navigates_and_returns_index() -> None:
@@ -439,23 +502,54 @@ def test_setup_main_runs_uv_and_engine_install(monkeypatch, tmp_path: Path, caps
             return Result(0)
         return Result(0)
 
-    skill_calls: list[dict] = []
+    config_calls: list[dict] = []
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root)])
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "uv" if name == "uv" else None)
     monkeypatch.setattr(setup.subprocess, "run", fake_run)
     monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
-    monkeypatch.setattr(get_skill, "interactive_install", lambda **kwargs: skill_calls.append(kwargs))
+    monkeypatch.setattr(setup, "configure_mcp", configure_mcp)
+    monkeypatch.setattr(configure_mcp, "interactive_configure", lambda **kwargs: config_calls.append(kwargs))
 
     setup.main()
 
     assert calls[0] == (
         ["uv", "pip", "install", "--python", setup.sys.executable, "setuptools", "wheel"],
         None,
-        True,
+        False,
     )
     assert calls[1][0][0:3] == [setup.sys.executable, "setup.py", "build"]
     assert calls[1][1] == engine_dir
     assert "matlabengine installed successfully." in capsys.readouterr().out
-    assert skill_calls == [{"fallback": "hint"}]
+    assert config_calls == [{"preferred_scope": None, "force": False, "dry_run": False, "noninteractive_fallback": "hint"}]
+
+
+def test_setup_main_can_skip_configuration(monkeypatch, tmp_path: Path) -> None:
+    matlab_root = tmp_path / "MATLAB" / "R2025a"
+    engine_dir = matlab_root / "extern" / "engines" / "python"
+    engine_dir.mkdir(parents=True)
+
+    calls: list[tuple[list[str], Path | None, bool | None]] = []
+
+    class Result:
+        def __init__(self, returncode: int = 0) -> None:
+            self.returncode = returncode
+
+    def fake_run(cmd: list[str], check: bool = False, cwd: Path | None = None):
+        calls.append((cmd, cwd, check))
+        return Result(0)
+
+    config_calls: list[dict] = []
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root), "--skip-configure"])
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "uv" if name == "uv" else None)
+    monkeypatch.setattr(setup.subprocess, "run", fake_run)
+    monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    monkeypatch.setattr(setup, "configure_mcp", configure_mcp)
+    monkeypatch.setattr(configure_mcp, "interactive_configure", lambda **kwargs: config_calls.append(kwargs))
+
+    setup.main()
+
+    assert calls[1][1] == engine_dir
+    assert config_calls == []
 
 
 def test_setup_main_exits_when_engine_dir_missing(monkeypatch, tmp_path: Path) -> None:
@@ -464,4 +558,47 @@ def test_setup_main_exits_when_engine_dir_missing(monkeypatch, tmp_path: Path) -
 
     with pytest.raises(SystemExit, match="MATLAB engine path not found"):
         setup.main()
+
+
+class _RunResult:
+    def __init__(self, returncode: int = 0) -> None:
+        self.returncode = returncode
+
+
+def test_install_build_deps_uses_uv_when_available(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(setup.shutil, "which", lambda name: r"C:\uv.exe" if name == "uv" else None)
+    monkeypatch.setattr(setup.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd)) or _RunResult(0))
+
+    setup._install_build_deps()
+
+    assert calls == [["uv", "pip", "install", "--python", setup.sys.executable, "setuptools", "wheel"]]
+
+
+def test_install_build_deps_falls_back_to_pip_without_uv(monkeypatch) -> None:
+    # The README's plain-pip install path promises `setup` works without uv, so a
+    # machine with no uv must bootstrap pip and use it rather than crash on uv.
+    calls: list[list[str]] = []
+    monkeypatch.setattr(setup.shutil, "which", lambda name: None)
+    monkeypatch.setattr(setup.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd)) or _RunResult(0))
+
+    setup._install_build_deps()
+
+    assert calls == [
+        [setup.sys.executable, "-m", "ensurepip", "--upgrade"],
+        [setup.sys.executable, "-m", "pip", "install", "setuptools", "wheel"],
+    ]
+
+
+def test_install_build_deps_exits_when_install_fails(monkeypatch) -> None:
+    def fake_run(cmd: list[str], **kw):
+        if "setuptools" in cmd:
+            return _RunResult(1)
+        return _RunResult(0)
+
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "uv")
+    monkeypatch.setattr(setup.subprocess, "run", fake_run)
+
+    with pytest.raises(SystemExit, match="build dependencies"):
+        setup._install_build_deps()
 

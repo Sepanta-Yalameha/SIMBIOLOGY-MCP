@@ -19,7 +19,14 @@ dependencies = [
     "httpx>=0.28",
     "python-dotenv>=1.2",
     "igem-registry-api>=0.1",
+    "tomlkit>=0.13",
 ]
+
+[project.urls]
+Repository = "https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP"
+Issues = "https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/issues"
+Changelog = "https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/blob/main/CHANGELOG.md"
+Releases = "https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/releases"
 
 [project.optional-dependencies]
 dev = ["coverage>=7", "pytest>=8"]

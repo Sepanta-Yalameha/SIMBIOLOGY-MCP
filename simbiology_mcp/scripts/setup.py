@@ -8,6 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from . import configure_mcp, tui
+
 
 def find_matlab_installs_windows():
     import winreg
@@ -67,8 +69,6 @@ def select_matlab_root(root_arg, index_arg):
     if len(installs) == 1:
         return installs[0][1]
 
-    from . import tui
-
     if not tui.is_interactive():
         listing = "\n".join(f"  [{i}] {version} -> {root}" for i, (version, root) in enumerate(installs))
         sys.exit(f"Multiple MATLAB installations found. Re-run with --matlab-index N:\n{listing}")
@@ -81,11 +81,41 @@ def select_matlab_root(root_arg, index_arg):
     return installs[choice][1]
 
 
+def _install_build_deps() -> None:
+    """Install the wheels matlabengine's setup.py needs to build (setuptools, wheel).
+
+    uv is preferred because it can install prebuilt wheels without pip present in
+    the target venv at all. But the README's plain-`pip` install path promises
+    `setup` works for people who do not want uv, so uv must not be a hard
+    requirement: with no uv, bootstrap pip via ensurepip and use it instead.
+    """
+    uv_available = shutil.which("uv") is not None
+    if uv_available:
+        command = ["uv", "pip", "install", "--python", sys.executable, "setuptools", "wheel"]
+    else:
+        # ensurepip is a no-op when pip is already present and bootstraps it when
+        # it is not; either way the install below then has a pip to run.
+        subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], check=False)
+        command = [sys.executable, "-m", "pip", "install", "setuptools", "wheel"]
+    if subprocess.run(command).returncode != 0:
+        sys.exit("Failed to install build dependencies (setuptools, wheel). Install them manually, then re-run.")
+
+
 def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--matlab-root")
     parser.add_argument("--matlab-index", type=int)
+    parser.add_argument("--client", choices=configure_mcp.client_names())
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--user", action="store_true")
+    scope.add_argument("--project", action="store_true")
+    parser.add_argument("--skip-configure", action="store_true")
+    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
+
+    if args.skip_configure and (args.client is not None or args.user or args.project):
+        parser.error("--skip-configure cannot be combined with --client, --user, or --project")
 
     matlab_root = select_matlab_root(args.matlab_root, args.matlab_index)
     engine_dir = matlab_root / "extern" / "engines" / "python"
@@ -96,12 +126,7 @@ def main(argv: list[str] | None = None):
     shutil.rmtree(build_temp, ignore_errors=True)
     build_temp.mkdir(parents=True)
 
-    # uv can install prebuilt wheels (setuptools, wheel) without needing pip
-    # present in the target venv at all.
-    subprocess.run(
-        ["uv", "pip", "install", "--python", sys.executable, "setuptools", "wheel"],
-        check=True,
-    )
+    _install_build_deps()
 
     # Build IN PLACE inside the real MATLAB folder (matlabengine's setup.py
     # validates the install via paths relative to its own location, so it
@@ -117,10 +142,20 @@ def main(argv: list[str] | None = None):
 
     print("matlabengine installed successfully.")
 
-    # Offer to install the workflow skill into an agent's skills directory.
-    from . import get_skill
+    if args.skip_configure:
+        return
 
-    get_skill.interactive_install(fallback="hint")
+    scope_name = "project" if args.project else "user"
+    if args.client is not None:
+        configure_mcp.configure_client(args.client, scope=scope_name, force=args.force, dry_run=args.dry_run)
+        return
+
+    configure_mcp.interactive_configure(
+        preferred_scope="project" if args.project else None,
+        force=args.force,
+        dry_run=args.dry_run,
+        noninteractive_fallback="hint",
+    )
 
 
 if __name__ == "__main__":
