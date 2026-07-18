@@ -504,6 +504,7 @@ def test_setup_main_runs_uv_and_engine_install(monkeypatch, tmp_path: Path, caps
 
     config_calls: list[dict] = []
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root)])
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "uv" if name == "uv" else None)
     monkeypatch.setattr(setup.subprocess, "run", fake_run)
     monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
     monkeypatch.setattr(setup, "configure_mcp", configure_mcp)
@@ -514,7 +515,7 @@ def test_setup_main_runs_uv_and_engine_install(monkeypatch, tmp_path: Path, caps
     assert calls[0] == (
         ["uv", "pip", "install", "--python", setup.sys.executable, "setuptools", "wheel"],
         None,
-        True,
+        False,
     )
     assert calls[1][0][0:3] == [setup.sys.executable, "setup.py", "build"]
     assert calls[1][1] == engine_dir
@@ -539,6 +540,7 @@ def test_setup_main_can_skip_configuration(monkeypatch, tmp_path: Path) -> None:
 
     config_calls: list[dict] = []
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root), "--skip-configure"])
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "uv" if name == "uv" else None)
     monkeypatch.setattr(setup.subprocess, "run", fake_run)
     monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
     monkeypatch.setattr(setup, "configure_mcp", configure_mcp)
@@ -556,4 +558,47 @@ def test_setup_main_exits_when_engine_dir_missing(monkeypatch, tmp_path: Path) -
 
     with pytest.raises(SystemExit, match="MATLAB engine path not found"):
         setup.main()
+
+
+class _RunResult:
+    def __init__(self, returncode: int = 0) -> None:
+        self.returncode = returncode
+
+
+def test_install_build_deps_uses_uv_when_available(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(setup.shutil, "which", lambda name: r"C:\uv.exe" if name == "uv" else None)
+    monkeypatch.setattr(setup.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd)) or _RunResult(0))
+
+    setup._install_build_deps()
+
+    assert calls == [["uv", "pip", "install", "--python", setup.sys.executable, "setuptools", "wheel"]]
+
+
+def test_install_build_deps_falls_back_to_pip_without_uv(monkeypatch) -> None:
+    # The README's plain-pip install path promises `setup` works without uv, so a
+    # machine with no uv must bootstrap pip and use it rather than crash on uv.
+    calls: list[list[str]] = []
+    monkeypatch.setattr(setup.shutil, "which", lambda name: None)
+    monkeypatch.setattr(setup.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd)) or _RunResult(0))
+
+    setup._install_build_deps()
+
+    assert calls == [
+        [setup.sys.executable, "-m", "ensurepip", "--upgrade"],
+        [setup.sys.executable, "-m", "pip", "install", "setuptools", "wheel"],
+    ]
+
+
+def test_install_build_deps_exits_when_install_fails(monkeypatch) -> None:
+    def fake_run(cmd: list[str], **kw):
+        if "setuptools" in cmd:
+            return _RunResult(1)
+        return _RunResult(0)
+
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "uv")
+    monkeypatch.setattr(setup.subprocess, "run", fake_run)
+
+    with pytest.raises(SystemExit, match="build dependencies"):
+        setup._install_build_deps()
 

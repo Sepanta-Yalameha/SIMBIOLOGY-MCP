@@ -139,7 +139,7 @@ def _path_for_client(client: str, scope: str) -> Path:
     if client == "windsurf":
         return root / ".codeium" / "windsurf" / "mcp_config.json"
     if client == "copilot-cli":
-        return Path(os.environ.get("COPILOT_HOME", str(root / ".copilot"))) / "mcp-config.json"
+        return root / ".copilot" / "mcp-config.json"
     if client == "vscode":
         return root / ".vscode" / "mcp.json"
     raise SystemExit(f"Unknown client '{client}'.")
@@ -161,8 +161,6 @@ def _render_native_command(client: str, scope: str) -> list[str]:
         return ["claude", "mcp", "add", "--transport", "stdio", "--scope", scope, SERVER_NAME, "--", command, *args]
     if client == "codex":
         return ["codex", "mcp", "add", SERVER_NAME, "--", command, *args]
-    if client == "copilot-cli":
-        return ["copilot", "mcp", "add", SERVER_NAME, "--", command, *args]
     if client == "vscode" and scope == "user":
         return ["code", "--add-mcp", json.dumps({"name": SERVER_NAME, "type": "stdio", "command": command, "args": args})]
     raise SystemExit(f"{_CLIENT_LABELS[client]} does not support native configuration for {scope} scope.")
@@ -182,6 +180,17 @@ def _render_native_remove_command(client: str, scope: str) -> list[str] | None:
     return None
 
 
+# Each client CLI words a pre-existing entry differently, so match the family
+# rather than one literal: without this, a benign re-run against a CLI that does
+# not happen to say "already exists" crashes instead of being a no-op.
+_ALREADY_CONFIGURED_MARKERS = ("already exists", "already configured", "already registered")
+
+
+def _is_already_configured(message: str) -> bool:
+    lowered = message.casefold()
+    return any(marker in lowered for marker in _ALREADY_CONFIGURED_MARKERS)
+
+
 def _run_native_configure(client: str, scope: str, *, force: bool, dry_run: bool) -> str:
     """Register with a client through its own CLI.
 
@@ -196,12 +205,15 @@ def _run_native_configure(client: str, scope: str, *, force: bool, dry_run: bool
         return DRY_RUN if dry_run else WRITTEN
     except SystemExit as exc:
         message = str(exc)
-        if "already exists" not in message.casefold():
+        if not _is_already_configured(message):
             raise
         if not force:
-            # Say what the files written here already say, rather than leaving
-            # the client's own wording as the only guidance.
-            raise SystemExit(f"{message}\nRe-run with --force to replace it.") from exc
+            # A re-run that finds our entry already present is a no-op success,
+            # the same outcome a file-writing client reports as UNCHANGED. We
+            # cannot read a native client's own file to confirm it is byte
+            # identical, but a same-named entry is almost certainly the one we
+            # added before, and --force still forces a clean replace.
+            return UNCHANGED
         remove = _render_native_remove_command(client, scope)
         if remove is None:
             raise SystemExit(f"{message}\n--force cannot replace it: {_CLIENT_LABELS[client]} has no command to remove an entry. Edit its configuration by hand.") from exc
@@ -394,7 +406,7 @@ def _run_native(command: list[str], *, dry_run: bool, check: bool = True) -> boo
 def _writes_own_file(client: str, scope: str) -> bool:
     """Whether we edit this client's config ourselves rather than call its CLI."""
 
-    if client in {"cursor", "windsurf"}:
+    if client in {"cursor", "windsurf", "copilot-cli"}:
         return True
     return client in {"codex", "vscode"} and scope == "project"
 
@@ -446,7 +458,11 @@ def _apply_client_config(client: str, scope: str, *, force: bool, dry_run: bool)
         return _configure_json(client, scope, force=force, dry_run=dry_run)
 
     if client == "copilot-cli":
-        return _run_native_configure(client, scope, force=force, dry_run=dry_run)
+        # Copilot CLI reads ~/.copilot/mcp-config.json (root `mcpServers`, local
+        # servers typed "local"), so write it directly. Shelling out to
+        # `copilot mcp add` would depend on the standalone CLI being installed and,
+        # against the VS Code bootstrapper shim, can exit 0 without configuring.
+        return _configure_json(client, scope, force=force, dry_run=dry_run, root_key="mcpServers", server_type="local")
 
     if client == "vscode":
         if scope == "user":

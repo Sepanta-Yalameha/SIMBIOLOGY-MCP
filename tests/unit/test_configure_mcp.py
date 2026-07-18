@@ -240,6 +240,43 @@ def test_configure_vscode_project_declares_stdio_type(monkeypatch, tmp_path: Pat
     }
 
 
+def test_copilot_cli_config_path_is_under_copilot_home(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(configure_mcp, "_user_root", lambda: tmp_path)
+
+    assert configure_mcp._path_for_client("copilot-cli", "user") == tmp_path / ".copilot" / "mcp-config.json"
+
+
+def test_configure_copilot_cli_writes_local_server(monkeypatch, capsys, tmp_path: Path) -> None:
+    # Copilot CLI stores MCP servers in ~/.copilot/mcp-config.json under an
+    # `mcpServers` root, with `type: "local"`. Writing that file directly works
+    # whether or not the standalone @github/copilot CLI is installed, unlike
+    # shelling out to `copilot mcp add`, which cannot be trusted on a machine
+    # that only has the VS Code bootstrapper shim.
+    target = tmp_path / ".copilot" / "mcp-config.json"
+    monkeypatch.setattr(configure_mcp, "_path_for_client", lambda client, scope: target)
+    monkeypatch.setattr(configure_mcp, "resolve_server_launch", lambda: (r"C:\repo\.venv\Scripts\simbiology-mcp.exe", ["start"]))
+    monkeypatch.setattr(configure_mcp, "_is_interactive", lambda: False)
+
+    configure_mcp.configure_client("copilot-cli", scope="user", dry_run=False)
+
+    out = capsys.readouterr().out
+    assert "Added the simbiology MCP server for GitHub Copilot CLI (user scope)." in out
+    assert f"File modified: {target}" in out
+    assert json.loads(target.read_text(encoding="utf-8")) == {
+        "mcpServers": {
+            "simbiology": {
+                "type": "local",
+                "command": r"C:\repo\.venv\Scripts\simbiology-mcp.exe",
+                "args": ["start"],
+            }
+        }
+    }
+
+    # A re-run finds the identical entry and is a no-op success, not an error.
+    configure_mcp.configure_client("copilot-cli", scope="user", dry_run=False)
+    assert "already configured for GitHub Copilot CLI (user scope)." in capsys.readouterr().out
+
+
 def _record_native(monkeypatch, *, fail_add_with: str | None = None) -> list[list[str]]:
     """Record every native command, optionally making the first `add` refuse."""
 
@@ -280,14 +317,28 @@ def test_force_removes_only_after_the_add_is_refused(monkeypatch) -> None:
     ]
 
 
-def test_existing_entry_without_force_is_left_alone(monkeypatch) -> None:
+def test_native_rerun_without_force_reports_already_configured(monkeypatch, capsys) -> None:
+    # A benign re-run that finds our entry already present must be a no-op success,
+    # not an error -- otherwise `simbiology-mcp setup` fails at its last step every
+    # time it is run twice. Only the add runs, and it reports like a file-writing
+    # client reports an unchanged config.
     calls = _record_native(monkeypatch, fail_add_with="MCP server simbiology already exists")
 
-    with pytest.raises(SystemExit) as excinfo:
-        configure_mcp.configure_client("claude-code", scope="user", force=False, dry_run=False)
+    configure_mcp.configure_client("claude-code", scope="user", force=False, dry_run=False)
 
     assert [c[:3] for c in calls] == [["claude", "mcp", "add"]]
-    assert "--force" in str(excinfo.value)
+    assert "already configured for Claude Code (user scope)." in capsys.readouterr().out
+
+
+def test_native_rerun_detects_alternate_already_configured_wording(monkeypatch, capsys) -> None:
+    # Idempotency must not hinge on one CLI's exact phrasing: each client words a
+    # duplicate differently, so a family of markers is recognised.
+    calls = _record_native(monkeypatch, fail_add_with="server 'simbiology' is already configured")
+
+    configure_mcp.configure_client("codex", scope="user", force=False, dry_run=False)
+
+    assert [c[:3] for c in calls] == [["codex", "mcp", "add"]]
+    assert "already configured for Codex (user scope)." in capsys.readouterr().out
 
 
 def test_force_reports_when_client_cannot_remove(monkeypatch, capsys) -> None:
@@ -352,7 +403,7 @@ def test_native_client_errors_are_stripped_of_colour(monkeypatch, tmp_path: Path
     class _Failed:
         returncode = 1
         stdout = ""
-        stderr = "\x1b[31mMCP server simbiology already exists\x1b[39m"
+        stderr = "\x1b[31mnot logged in; run `claude login`\x1b[39m"
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(configure_mcp, "resolve_server_launch", lambda: ("sim.exe", ["start"]))
@@ -363,7 +414,7 @@ def test_native_client_errors_are_stripped_of_colour(monkeypatch, tmp_path: Path
         configure_mcp.configure_client("claude-code", scope="project", force=False, dry_run=False)
 
     assert "\x1b[" not in str(excinfo.value)
-    assert "already exists" in str(excinfo.value)
+    assert "not logged in" in str(excinfo.value)
 
 
 def test_file_writing_client_reports_the_same_way(monkeypatch, capsys, tmp_path: Path) -> None:
@@ -382,10 +433,13 @@ def test_file_writing_client_reports_the_same_way(monkeypatch, capsys, tmp_path:
 
 
 def test_native_failure_surfaces_client_error(monkeypatch, tmp_path: Path) -> None:
+    # A genuine failure (not a pre-existing entry) must still surface: capturing
+    # the CLI's output so every client reports uniformly must not swallow the
+    # real reason the client refused.
     class _Failed:
         returncode = 1
         stdout = ""
-        stderr = "MCP server simbiology already exists in .mcp.json"
+        stderr = "failed to write config: permission denied"
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(configure_mcp, "resolve_server_launch", lambda: ("sim.exe", ["start"]))
@@ -395,9 +449,7 @@ def test_native_failure_surfaces_client_error(monkeypatch, tmp_path: Path) -> No
     with pytest.raises(SystemExit) as excinfo:
         configure_mcp.configure_client("claude-code", scope="project", dry_run=False)
 
-    # Capturing output must not swallow why the client refused.
-    assert "already exists" in str(excinfo.value)
-    assert "--force" in str(excinfo.value)
+    assert "permission denied" in str(excinfo.value)
 
 
 def test_select_client_navigates_and_selects() -> None:

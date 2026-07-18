@@ -81,6 +81,26 @@ def select_matlab_root(root_arg, index_arg):
     return installs[choice][1]
 
 
+def _install_build_deps() -> None:
+    """Install the wheels matlabengine's setup.py needs to build (setuptools, wheel).
+
+    uv is preferred because it can install prebuilt wheels without pip present in
+    the target venv at all. But the README's plain-`pip` install path promises
+    `setup` works for people who do not want uv, so uv must not be a hard
+    requirement: with no uv, bootstrap pip via ensurepip and use it instead.
+    """
+    uv_available = shutil.which("uv") is not None
+    if uv_available:
+        command = ["uv", "pip", "install", "--python", sys.executable, "setuptools", "wheel"]
+    else:
+        # ensurepip is a no-op when pip is already present and bootstraps it when
+        # it is not; either way the install below then has a pip to run.
+        subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], check=False)
+        command = [sys.executable, "-m", "pip", "install", "setuptools", "wheel"]
+    if subprocess.run(command).returncode != 0:
+        sys.exit("Failed to install build dependencies (setuptools, wheel). Install them manually, then re-run.")
+
+
 def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--matlab-root")
@@ -106,12 +126,7 @@ def main(argv: list[str] | None = None):
     shutil.rmtree(build_temp, ignore_errors=True)
     build_temp.mkdir(parents=True)
 
-    # uv can install prebuilt wheels (setuptools, wheel) without needing pip
-    # present in the target venv at all.
-    subprocess.run(
-        ["uv", "pip", "install", "--python", sys.executable, "setuptools", "wheel"],
-        check=True,
-    )
+    _install_build_deps()
 
     # Build IN PLACE inside the real MATLAB folder (matlabengine's setup.py
     # validates the install via paths relative to its own location, so it
