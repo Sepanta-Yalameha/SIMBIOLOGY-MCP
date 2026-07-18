@@ -1,5 +1,12 @@
 # SimBiology MCP Server
 
+[![PyPI](https://img.shields.io/pypi/v/simbiology-mcp?logo=pypi\&logoColor=white)](https://pypi.org/project/simbiology-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/simbiology-mcp?logo=python\&logoColor=white)](https://pypi.org/project/simbiology-mcp/)
+[![Tests](https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/actions/workflows/test.yml?query=branch%3Amain)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![MATLAB](https://img.shields.io/badge/MATLAB-R2024a%2B-orange)](https://www.mathworks.com/products/matlab.html)
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows\&logoColor=white)](#requirements)
+
 ## Overview
 
 The SimBiology MCP Server is a Model Context Protocol (MCP) interface for MATLAB SimBiology, enabling programmatic control of biological modeling and simulation workflows from AI agents and external tools.
@@ -195,6 +202,13 @@ simbiology_mcp/
 examples/        Runnable demos (e.g. demo_simulation.py)
 tests/           Unit tests plus MATLAB/live integration tests
 ```
+
+## Authors
+
+- [Yojith Sai Biradavolu](https://github.com/yojith)
+- [Sepanta Yalameha](https://github.com/Sepanta-Yalameha)
+
+Contributions, issues, and feature requests are welcome through the project’s [GitHub repository](https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP).
 
 ---
 
