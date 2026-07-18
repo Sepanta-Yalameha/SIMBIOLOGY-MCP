@@ -1,7 +1,7 @@
 """Print or install the packaged SimBiology skill markdown.
 
-With no flags this launches an interactive picker (arrow keys) to choose the
-agent to install the skill for. Flags (`--client`, `--project`, `--user`,
+With no flags this launches interactive pickers (arrow keys) to choose the
+agent and install scope. Flags (`--client`, `--project`, `--user`,
 `--install-path`, `--print`) drive the same behaviour non-interactively.
 """
 
@@ -110,13 +110,38 @@ def _select_client(*, read_key=None, stream=None) -> str | None:
     return None if choice is None else _CLIENT_ORDER[choice]
 
 
+def _scope_label(client: str, scope: str) -> str:
+    return f"{scope.title()} - {_client_target(client, scope)}"
+
+
+def _prompt_custom_path(*, input_func=None) -> Path | None:
+    if input_func is None:
+        input_func = input
+    raw = input_func("Install SKILL.md to custom path: ").strip()
+    return None if raw == "" else Path(raw)
+
+
+def _select_install_target(*, client: str, scope: str | None = None, read_key=None, stream=None, input_func=None) -> Path | None:
+    if scope is not None:
+        return _client_target(client, scope)
+
+    labels = [_scope_label(client, "user"), _scope_label(client, "project"), "Custom path", "Cancel"]
+    title = "Where should the skill be installed?"
+    choice = tui.select(title, labels, read_key=read_key, stream=stream)
+    if choice is None or choice == 3:
+        return None
+    if choice == 2:
+        return _prompt_custom_path(input_func=input_func)
+    return _client_target(client, "user" if choice == 0 else "project")
+
+
 def _install_for_client(client: str, scope: str) -> None:
     _, target = _write_skill(_client_target(client, scope))
     print(f"Installed {_CLIENT_LABELS[client]} skill to {target}")
 
 
-def interactive_install(*, scope: str = "user", fallback: str = "print") -> None:
-    """Pick a client with the arrow-key menu and install the skill at `scope`.
+def interactive_install(*, client: str | None = None, scope: str | None = None, fallback: str = "print") -> None:
+    """Pick missing install choices with arrow-key menus and install the skill.
 
     With no interactive terminal, `fallback` decides what happens: `"print"`
     prints SKILL.md (so `get-skill` stays pipeable), `"hint"` prints a short note
@@ -138,17 +163,23 @@ def interactive_install(*, scope: str = "user", fallback: str = "print") -> None
         return
 
     _enable_windows_ansi()
-    client = _select_client()
+    if client is None:
+        client = _select_client()
     if client is None:
         print("Skill installation cancelled.")
         return
-    _install_for_client(client, scope)
+    target_path = _select_install_target(client=client, scope=scope)
+    if target_path is None:
+        print("Skill installation cancelled.")
+        return
+    _, target = _write_skill(target_path)
+    print(f"Installed skill to {target}")
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="simbiology-mcp get-skill",
-        description="Install or print the packaged SimBiology workflow skill (SKILL.md). With no flags, pick an agent interactively.",
+        description="Install or print the packaged SimBiology workflow skill (SKILL.md). With no flags, pick an agent and scope interactively.",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")
@@ -159,7 +190,7 @@ def main(argv: list[str] | None = None) -> None:
     scope.add_argument("--project", action="store_true", help="Install into the current project's skills directory.")
 
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
-    scope_name = "project" if args.project else "user"
+    scope_name = "project" if args.project else "user" if args.user else None
 
     if args.print_skill:
         if args.project or args.user:
@@ -175,7 +206,10 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if args.client is not None:
-        _install_for_client(args.client, scope_name)
+        if scope_name is None and _is_interactive():
+            interactive_install(client=args.client, fallback="error")
+        else:
+            _install_for_client(args.client, scope_name or "user")
         return
 
     if args.project or args.user:
@@ -184,7 +218,7 @@ def main(argv: list[str] | None = None) -> None:
         interactive_install(scope=scope_name, fallback="error")
         return
 
-    interactive_install(scope="user", fallback="print")
+    interactive_install(fallback="print")
 
 if __name__ == "__main__":
     main()

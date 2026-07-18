@@ -213,6 +213,39 @@ def test_select_client_wraps_up_and_cancels() -> None:
     assert cancelled is None
 
 
+def test_scope_label_shows_install_paths(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path / "repo")
+    target = tmp_path / "repo" / ".agents" / "skills" / "simbiology-workflow" / "SKILL.md"
+
+    assert get_skill._scope_label("codex", "project") == f"Project - {target}"
+
+
+def test_select_install_target_uses_selected_scope(monkeypatch, tmp_path: Path) -> None:
+    import io
+
+    monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path / "home")
+    monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path / "repo")
+
+    target = get_skill._select_install_target(client="codex", read_key=_fake_keys(["down", "enter"]), stream=io.StringIO())
+
+    assert target == tmp_path / "repo" / ".agents" / "skills" / "simbiology-workflow" / "SKILL.md"
+
+
+def test_select_install_target_accepts_custom_path(tmp_path: Path) -> None:
+    import io
+
+    target = tmp_path / "custom-skill.md"
+
+    chosen = get_skill._select_install_target(
+        client="codex",
+        read_key=_fake_keys(["down", "down", "enter"]),
+        stream=io.StringIO(),
+        input_func=lambda prompt="": str(target),
+    )
+
+    assert chosen == target
+
+
 def test_interactive_install_non_tty_prints_skill(monkeypatch, capsys) -> None:
     monkeypatch.setattr(get_skill, "_is_interactive", lambda: False)
 
@@ -235,10 +268,29 @@ def test_interactive_install_writes_selected_client(monkeypatch, capsys, tmp_pat
     monkeypatch.setattr(get_skill, "_select_client", lambda **kwargs: "windsurf")
     monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
 
-    get_skill.interactive_install()
+    get_skill.interactive_install(scope="user")
 
     assert (tmp_path / ".codeium" / "windsurf" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
     assert "Installed" in capsys.readouterr().out
+
+
+def test_interactive_install_prompts_for_missing_scope(monkeypatch, capsys, tmp_path: Path) -> None:
+    seen: list[dict] = []
+
+    def fake_select_install_target(**kwargs):
+        seen.append(kwargs)
+        return tmp_path / "SKILL.md"
+
+    monkeypatch.setattr(get_skill, "_is_interactive", lambda: True)
+    monkeypatch.setattr(get_skill, "_enable_windows_ansi", lambda: None)
+    monkeypatch.setattr(get_skill, "_select_client", lambda **kwargs: "codex")
+    monkeypatch.setattr(get_skill, "_select_install_target", fake_select_install_target)
+
+    get_skill.interactive_install()
+
+    assert seen == [{"client": "codex", "scope": None}]
+    assert (tmp_path / "SKILL.md").exists()
+    assert str(tmp_path / "SKILL.md") in capsys.readouterr().out
 
 
 def test_interactive_install_cancelled(monkeypatch, capsys, tmp_path: Path) -> None:

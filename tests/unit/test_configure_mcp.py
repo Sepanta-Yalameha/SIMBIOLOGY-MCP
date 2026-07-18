@@ -436,6 +436,25 @@ def test_select_scope_menu(keys: list[str], expected: str | None) -> None:
     assert configure_mcp._select_scope(client="cursor", read_key=_fake_keys(keys), stream=io.StringIO()) == expected
 
 
+def test_scope_label_shows_known_config_paths(monkeypatch, tmp_path: Path) -> None:
+    target = tmp_path / "mcp.json"
+    monkeypatch.setattr(configure_mcp, "_path_for_client", lambda client, scope: target)
+
+    assert configure_mcp._scope_label("cursor", "user") == f"User - {target}"
+
+
+@pytest.mark.parametrize(
+    ("keys", "expected"),
+    [
+        (["enter"], False),
+        (["down", "enter"], True),
+        (["down", "down", "enter"], None),
+    ],
+)
+def test_select_dry_run_menu(keys: list[str], expected: bool | None) -> None:
+    assert configure_mcp._select_dry_run(read_key=_fake_keys(keys), stream=io.StringIO()) is expected
+
+
 def test_interactive_configure_errors_without_a_terminal(monkeypatch) -> None:
     monkeypatch.setattr(configure_mcp, "_is_interactive", lambda: False)
 
@@ -495,6 +514,15 @@ def test_interactive_configure_passes_choices_and_flags_through(monkeypatch) -> 
     configure_mcp.interactive_configure(force=True, dry_run=True)
 
     assert seen == [{"client": "cursor", "scope": "project", "force": True, "dry_run": True}]
+
+
+def test_interactive_configure_can_prompt_for_dry_run(monkeypatch) -> None:
+    seen, _ = _stub_pickers(monkeypatch, client="cursor", scope="project")
+    monkeypatch.setattr(configure_mcp, "_select_dry_run", lambda **kwargs: True)
+
+    configure_mcp.interactive_configure(dry_run=None)
+
+    assert seen == [{"client": "cursor", "scope": "project", "force": False, "dry_run": True}]
 
 
 def test_interactive_configure_forwards_preferred_scope_to_the_picker(monkeypatch) -> None:

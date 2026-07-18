@@ -476,12 +476,28 @@ def configure_client(
 
 
 def _select_client(*, read_key=None, stream=None) -> str | None:
-    labels = [_CLIENT_LABELS[client] for client in _CLIENT_ORDER] + ["Cancel"]
+    labels = [f"{_CLIENT_LABELS[client]} [{', '.join(supported_scopes(client))}]" for client in _CLIENT_ORDER] + ["Cancel"]
     title = "Configure the SimBiology MCP Server for which client?  (up/down to move, Enter to select, q to cancel)"
     choice = tui.select(title, labels, read_key=read_key, stream=stream)
     if choice is None or choice == len(labels) - 1:
         return None
     return _CLIENT_ORDER[choice]
+
+
+def _scope_label(client: str, scope: str) -> str:
+    path = _display_path(client, scope)
+    if path is not None:
+        return f"{scope.title()} - {path}"
+    return f"{scope.title()} - via {_CLIENT_LABELS[client]} CLI"
+
+
+def _select_dry_run(*, read_key=None, stream=None) -> bool | None:
+    labels = ["Write configuration", "Dry run only", "Cancel"]
+    title = "Configure now or preview the changes first?"
+    choice = tui.select(title, labels, read_key=read_key, stream=stream)
+    if choice is None or choice == 2:
+        return None
+    return choice == 1
 
 
 def _select_scope(*, client: str, preferred_scope: str | None = None, read_key=None, stream=None) -> str | None:
@@ -490,7 +506,7 @@ def _select_scope(*, client: str, preferred_scope: str | None = None, read_key=N
         return preferred_scope
     if len(scopes) == 1:
         return scopes[0]
-    labels = ["User", "Project", "Cancel"]
+    labels = [_scope_label(client, "user"), _scope_label(client, "project"), "Cancel"]
     title = "Configuration scope?"
     choice = tui.select(title, labels, read_key=read_key, stream=stream)
     if choice is None or choice == 2:
@@ -502,7 +518,7 @@ def interactive_configure(
     *,
     preferred_scope: str | None = None,
     force: bool = False,
-    dry_run: bool = False,
+    dry_run: bool | None = False,
     noninteractive_fallback: str = "error",
 ) -> None:
     if not _is_interactive():
@@ -521,6 +537,11 @@ def interactive_configure(
         return
 
     _enable_windows_ansi()
+    if dry_run is None:
+        dry_run = _select_dry_run()
+        if dry_run is None:
+            print("MCP configuration cancelled.")
+            return
     client = _select_client()
     if client is None:
         print("MCP configuration cancelled.")
@@ -535,7 +556,7 @@ def interactive_configure(
 def _list_clients() -> None:
     for client in _CLIENT_ORDER:
         scopes = ", ".join(supported_scopes(client))
-        print(f"{_CLIENT_LABELS[client]} ({client}): {scopes}")
+        print(f"{client}: [{scopes}]")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -553,12 +574,27 @@ def main(argv: list[str] | None = None) -> None:
         _list_clients()
         return
     if args.client is not None:
+        if not args.project and not args.user and _is_interactive():
+            _enable_windows_ansi()
+            dry_run = args.dry_run
+            if not dry_run:
+                selected_dry_run = _select_dry_run()
+                if selected_dry_run is None:
+                    print("MCP configuration cancelled.")
+                    return
+                dry_run = selected_dry_run
+            scope = _select_scope(client=args.client)
+            if scope is None:
+                print("MCP configuration cancelled.")
+                return
+            configure_client(args.client, scope=scope, force=args.force, dry_run=dry_run)
+            return
         configure_client(args.client, scope="project" if args.project else "user", force=args.force, dry_run=args.dry_run)
         return
     interactive_configure(
         preferred_scope="project" if args.project else None,
         force=args.force,
-        dry_run=args.dry_run,
+        dry_run=True if args.dry_run else None,
         noninteractive_fallback="error",
     )
 
