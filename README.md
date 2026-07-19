@@ -5,7 +5,7 @@
 [![Tests](https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/actions/workflows/test.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MATLAB](https://img.shields.io/badge/MATLAB-R2024a%2B-orange)](https://www.mathworks.com/products/matlab.html)
-[![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows\&logoColor=white)](#requirements)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](#requirements)
 
 ## Overview
 
@@ -37,21 +37,36 @@ Three installation paths are supported.
 
 Use this when you want the full source tree locally, including the repo skill files and tests.
 
-```powershell
+```shell
 git clone https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP.git
 cd SIMBIOLOGY-MCP
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
+```
+
+Activate the virtual environment:
+
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+```
+
+```shell
+# macOS or Linux
+source .venv/bin/activate
+```
+
+```shell
+python -m pip install -e .
 simbiology-mcp setup
 ```
 
-Then point your MCP client at the repo entry point:
+Then point your MCP client at the repo entry point. This is the Windows form; on macOS or Linux, use the absolute path to `.venv/bin/python` instead.
 
 ```json
 {
   "mcpServers": {
     "simbiology": {
-      "command": "C:/path/to/SIMBIOLOGY-MCP/.venv/Scripts/python.exe",
+      "command": "C:/absolute/path/to/SIMBIOLOGY-MCP/.venv/Scripts/python.exe",
       "args": ["-m", "simbiology_mcp", "start"]
     }
   }
@@ -71,6 +86,14 @@ Then point your MCP client at the installed `simbiology-mcp` command with the `s
 
 `simbiology-mcp setup` installs MATLAB Engine for Python and can optionally configure an MCP client in the same run. Use `simbiology-mcp configure` when you only want to write client configuration.
 
+To install the MATLAB Engine, configure a client, and install its matching skill in one command:
+
+```powershell
+simbiology-mcp setup --client copilot-cli --project
+```
+
+Without `--client`, `setup` walks through the same choices interactively after the MATLAB Engine installation. Add `--no-skill` to omit the matching skill.
+
 The skill installer stays separate:
 
 ```powershell
@@ -82,6 +105,7 @@ To skip the menu, name the agent (the target directory is created if missing):
 ```powershell
 simbiology-mcp get-skill --client claude-code          # ~/.claude/skills/...
 simbiology-mcp get-skill --client cursor --project     # ./.cursor/skills/...
+simbiology-mcp get-skill --client copilot-cli --project # ./.github/skills/...
 simbiology-mcp get-skill --install-path C:\path\to\SKILL.md  # exact path
 simbiology-mcp get-skill --print                       # print SKILL.md to stdout instead
 ```
@@ -107,6 +131,8 @@ simbiology-mcp configure --client codex --project
 simbiology-mcp configure --list-clients
 ```
 
+The configuration helper supports Claude Code, Cursor, Codex, Windsurf, GitHub Copilot CLI, and Visual Studio Code/GitHub Copilot. `--list-clients` shows the user and project scopes available for each client. Existing matching entries are left unchanged; use `--force` to replace a different existing entry.
+
 If the installed `simbiology-mcp` command is available, configuration points clients at that executable. Otherwise it falls back to `python -m simbiology_mcp start`.
 
 ### Get the synthetic biology modelling skill
@@ -126,8 +152,8 @@ Use `--client`, `--project`, `--user`, or `--install-path` to choose a destinati
 - MATLAB R2024a or later
 - SimBiology Toolbox installed
 - Python 3.12 or later
-- Windows operating system
-- MCP-compatible runtime environment (e.g., VSCode MCP client or agent framework)
+- A MATLAB-supported Windows, macOS, or Linux environment
+- An MCP-compatible client; the configuration helper supports Claude Code, Cursor, Codex, Windsurf, GitHub Copilot CLI, and Visual Studio Code/GitHub Copilot
 
 ---
 
@@ -135,9 +161,9 @@ Use `--client`, `--project`, `--user`, or `--install-path` to choose a destinati
 
 Start the server over stdio, either through the repo entry point or the installed command:
 
-```powershell
-# from the repo
-.\.venv\Scripts\python.exe -m simbiology_mcp start
+```shell
+# from an activated repo virtual environment
+python -m simbiology_mcp start
 
 # or, after installation
 simbiology-mcp start
