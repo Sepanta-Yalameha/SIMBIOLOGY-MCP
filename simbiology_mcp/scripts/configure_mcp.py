@@ -42,7 +42,7 @@ _CLIENT_SCOPES = {
     "cursor": ("user", "project"),
     "codex": ("user", "project"),
     "windsurf": ("user",),
-    "copilot-cli": ("user",),
+    "copilot-cli": ("user", "project"),
     "vscode": ("user", "project"),
 }
 
@@ -142,7 +142,7 @@ def _path_for_client(client: str, scope: str) -> Path:
     if client == "windsurf":
         return root / ".codeium" / "windsurf" / "mcp_config.json"
     if client == "copilot-cli":
-        return root / ".copilot" / "mcp-config.json"
+        return root / (Path(".copilot") / "mcp-config.json" if scope == "user" else Path(".github") / "mcp.json")
     if client == "vscode":
         return root / ".vscode" / "mcp.json"
     raise SystemExit(f"Unknown client '{client}'.")
@@ -461,11 +461,11 @@ def _apply_client_config(client: str, scope: str, *, force: bool, dry_run: bool)
         return _configure_json(client, scope, force=force, dry_run=dry_run)
 
     if client == "copilot-cli":
-        # Copilot CLI reads ~/.copilot/mcp-config.json (root `mcpServers`, local
-        # servers typed "local"), so write it directly. Shelling out to
+        # Copilot CLI reads user and project files with an `mcpServers` root, so
+        # write them directly. Shelling out to
         # `copilot mcp add` would depend on the standalone CLI being installed and,
         # against the VS Code bootstrapper shim, can exit 0 without configuring.
-        return _configure_json(client, scope, force=force, dry_run=dry_run, root_key="mcpServers", server_type="local")
+        return _configure_json(client, scope, force=force, dry_run=dry_run, root_key="mcpServers", server_type="stdio")
 
     if client == "vscode":
         if scope == "user":
@@ -483,7 +483,7 @@ def configure_client(
     scope: str = "user",
     force: bool = False,
     dry_run: bool = False,
-) -> None:
+) -> str:
     scopes = supported_scopes(client)
     if scope not in scopes:
         raise SystemExit(f"{_CLIENT_LABELS[client]} does not support {scope} scope.")
@@ -492,6 +492,7 @@ def configure_client(
     # A dry run has already printed the config or command it would have used.
     if status != DRY_RUN:
         _announce(client, scope, status)
+    return status
 
 
 def _select_client(*, read_key=None, stream=None) -> str | None:
@@ -569,7 +570,8 @@ def interactive_configure(
     if scope is None:
         print("MCP configuration cancelled.")
         return
-    configure_client(client, scope=scope, force=force, dry_run=dry_run)
+    status = configure_client(client, scope=scope, force=force, dry_run=dry_run)
+    return (client, scope) if status in {WRITTEN, UNCHANGED} else None
 
 
 def _list_clients() -> None:

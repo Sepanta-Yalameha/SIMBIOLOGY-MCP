@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import configure_mcp, tui
+from . import configure_mcp, get_skill, tui
 
 
 def find_matlab_installs_windows():
@@ -110,6 +110,7 @@ def main(argv: list[str] | None = None):
     scope.add_argument("--user", action="store_true")
     scope.add_argument("--project", action="store_true")
     parser.add_argument("--skip-configure", action="store_true")
+    parser.add_argument("--no-skill", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -147,15 +148,19 @@ def main(argv: list[str] | None = None):
 
     scope_name = "project" if args.project else "user"
     if args.client is not None:
-        configure_mcp.configure_client(args.client, scope=scope_name, force=args.force, dry_run=args.dry_run)
+        status = configure_mcp.configure_client(args.client, scope=scope_name, force=args.force, dry_run=args.dry_run)
+        if not args.no_skill and not args.dry_run and status != configure_mcp.CANCELLED:
+            get_skill._install_for_client(args.client, scope_name)
         return
 
-    configure_mcp.interactive_configure(
+    configured = configure_mcp.interactive_configure(
         preferred_scope="project" if args.project else None,
         force=args.force,
         dry_run=args.dry_run,
         noninteractive_fallback="hint",
     )
+    if configured is not None and not args.no_skill and not args.dry_run:
+        get_skill.interactive_install_after_configure(*configured)
 
 
 if __name__ == "__main__":

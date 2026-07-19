@@ -126,6 +126,14 @@ def test_client_target_rejects_unknown_client() -> None:
         get_skill._client_target("emacs", "user")
 
 
+def test_copilot_client_aliases_share_the_copilot_skill_path(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path)
+
+    expected = tmp_path / ".github" / "skills" / "simbiology-workflow" / "SKILL.md"
+    assert get_skill._client_target("copilot-cli", "project") == expected
+    assert get_skill._client_target("vscode", "project") == expected
+
+
 def test_get_skill_install_user_scope(monkeypatch, capsys, tmp_path: Path) -> None:
     monkeypatch.setattr(get_skill, "_user_root", lambda: tmp_path)
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-get-skill", "--client", "claude-code"])
@@ -303,6 +311,26 @@ def test_interactive_install_cancelled(monkeypatch, capsys, tmp_path: Path) -> N
 
     assert "cancelled" in capsys.readouterr().out.lower()
     assert not (tmp_path / ".claude").exists()
+
+
+def test_interactive_install_after_configure_installs_for_copilot_alias(monkeypatch) -> None:
+    installed: list[tuple[str, str]] = []
+    monkeypatch.setattr(tui, "select", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(get_skill, "_install_for_client", lambda client, scope: installed.append((client, scope)))
+
+    get_skill.interactive_install_after_configure("vscode", "project")
+
+    assert installed == [("copilot", "project")]
+
+
+def test_interactive_install_after_configure_opens_full_picker_for_another_location(monkeypatch) -> None:
+    calls: list[dict] = []
+    monkeypatch.setattr(tui, "select", lambda *args, **kwargs: 2)
+    monkeypatch.setattr(get_skill, "interactive_install", lambda **kwargs: calls.append(kwargs))
+
+    get_skill.interactive_install_after_configure("cursor", "user")
+
+    assert calls == [{"fallback": "hint"}]
 
 
 def test_cli_main_without_args_prints_help(monkeypatch, capsys) -> None:
@@ -521,6 +549,59 @@ def test_setup_main_runs_uv_and_engine_install(monkeypatch, tmp_path: Path, caps
     assert calls[1][1] == engine_dir
     assert "matlabengine installed successfully." in capsys.readouterr().out
     assert config_calls == [{"preferred_scope": None, "force": False, "dry_run": False, "noninteractive_fallback": "hint"}]
+
+
+def test_setup_main_installs_matching_skill_for_explicit_client(monkeypatch, tmp_path: Path) -> None:
+    matlab_root = tmp_path / "MATLAB" / "R2025a"
+    engine_dir = matlab_root / "extern" / "engines" / "python"
+    engine_dir.mkdir(parents=True)
+
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root), "--client", "vscode", "--project"])
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "uv")
+    monkeypatch.setattr(setup.subprocess, "run", lambda *args, **kwargs: _RunResult(0))
+    monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    configured: list[dict] = []
+    installed: list[tuple[str, str]] = []
+    monkeypatch.setattr(configure_mcp, "configure_client", lambda client, **kwargs: configured.append({"client": client, **kwargs}))
+    monkeypatch.setattr(get_skill, "_install_for_client", lambda client, scope: installed.append((client, scope)))
+
+    setup.main()
+
+    assert configured == [{"client": "vscode", "scope": "project", "force": False, "dry_run": False}]
+    assert installed == [("vscode", "project")]
+
+
+def test_setup_main_offers_skill_install_after_interactive_configuration(monkeypatch, tmp_path: Path) -> None:
+    matlab_root = tmp_path / "MATLAB" / "R2025a"
+    engine_dir = matlab_root / "extern" / "engines" / "python"
+    engine_dir.mkdir(parents=True)
+
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root)])
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "uv")
+    monkeypatch.setattr(setup.subprocess, "run", lambda *args, **kwargs: _RunResult(0))
+    monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    monkeypatch.setattr(configure_mcp, "interactive_configure", lambda **kwargs: ("copilot-cli", "project"))
+    offered: list[tuple[str, str]] = []
+    monkeypatch.setattr(get_skill, "interactive_install_after_configure", lambda client, scope: offered.append((client, scope)))
+
+    setup.main()
+
+    assert offered == [("copilot-cli", "project")]
+
+
+def test_setup_main_no_skill_skips_matching_skill_for_explicit_client(monkeypatch, tmp_path: Path) -> None:
+    matlab_root = tmp_path / "MATLAB" / "R2025a"
+    engine_dir = matlab_root / "extern" / "engines" / "python"
+    engine_dir.mkdir(parents=True)
+
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root), "--client", "codex", "--no-skill"])
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "uv")
+    monkeypatch.setattr(setup.subprocess, "run", lambda *args, **kwargs: _RunResult(0))
+    monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    monkeypatch.setattr(configure_mcp, "configure_client", lambda *args, **kwargs: None)
+    monkeypatch.setattr(get_skill, "_install_for_client", lambda *args, **kwargs: pytest.fail("skill should not be installed"))
+
+    setup.main()
 
 
 def test_setup_main_can_skip_configuration(monkeypatch, tmp_path: Path) -> None:

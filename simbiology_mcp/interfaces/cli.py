@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     get_skill_parser = subparsers.add_parser("get-skill", help="Print or install the packaged skill (interactive picker with no flags).")
     get_skill_mode = get_skill_parser.add_mutually_exclusive_group()
     get_skill_mode.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")
-    get_skill_mode.add_argument("--client", choices=sorted(get_skill._CLIENT_SKILL_DIRS), help="Install directly for a client. Combine with --user or --project to choose scope.")
+    get_skill_mode.add_argument("--client", choices=sorted(get_skill.client_names()), help="Install directly for a client. Combine with --user or --project to choose scope.")
     get_skill_mode.add_argument("--install-path", help="Install directly to an explicit path.")
     get_skill_scope = get_skill_parser.add_mutually_exclusive_group()
     get_skill_scope.add_argument("--user", action="store_true", help="Install into the user-level skills directory (default).")
@@ -40,6 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup_scope.add_argument("--user", action="store_true", help="Configure the user scope after install (default).")
     setup_scope.add_argument("--project", action="store_true", help="Configure the project scope after install.")
     setup_parser.add_argument("--skip-configure", action="store_true", help="Install MATLAB Engine only.")
+    setup_parser.add_argument("--no-skill", action="store_true", help="Do not install the SimBiology skill after MCP setup.")
     setup_parser.add_argument("--force", action="store_true", help="Replace an existing entry without prompting.")
     setup_parser.add_argument("--dry-run", action="store_true", help="Print the generated configuration without writing it.")
 
@@ -108,6 +109,8 @@ def _setup_argv(args: argparse.Namespace) -> list[str]:
         argv.append("--user")
     if args.skip_configure:
         argv.append("--skip-configure")
+    if args.no_skill:
+        argv.append("--no-skill")
     if args.force:
         argv.append("--force")
     if args.dry_run:
