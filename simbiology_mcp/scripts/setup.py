@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None):
     if result.returncode != 0:
         sys.exit(f"Install failed (exit {result.returncode}).")
 
-    print("matlabengine installed successfully.")
+    print("MATLAB Engine installed successfully.")
 
     if args.skip_configure:
         return

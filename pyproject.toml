@@ -30,9 +30,9 @@ Releases = "https://github.com/Sepanta-Yalameha/SIMBIOLOGY-MCP/releases"
 
 [project.optional-dependencies]
 dev = ["coverage>=7", "pytest>=8"]
-# 'matlab' pulls matlabengine from PyPI, whose version must match your installed
-# MATLAB release. simbiology_mcp/scripts/setup.py installs it straight from your local MATLAB
-# instead; prefer that unless you know the PyPI version lines up.
+# The `matlab` extra pulls `matlabengine` from PyPI, whose version must match the
+# installed MATLAB release. simbiology_mcp/scripts/setup.py installs it straight
+# from the local MATLAB installation instead; prefer that unless the PyPI version matches.
 matlab = ["matlabengine"]
 
 [project.scripts]

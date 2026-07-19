@@ -109,9 +109,9 @@ simbiology-mcp configure --list-clients
 
 If the installed `simbiology-mcp` command is available, configuration points clients at that executable. Otherwise it falls back to `python -m simbiology_mcp start`.
 
-### Get the workflow skill
+### Get the synthetic biology modelling skill
 
-The workflow skill installer stays separate from MCP configuration:
+The synthetic biology modelling skill installer stays separate from MCP configuration:
 
 ```powershell
 simbiology-mcp get-skill

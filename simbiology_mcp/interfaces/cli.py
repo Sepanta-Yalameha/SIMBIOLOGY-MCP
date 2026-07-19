@@ -40,7 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup_scope.add_argument("--user", action="store_true", help="Configure the user scope after install (default).")
     setup_scope.add_argument("--project", action="store_true", help="Configure the project scope after install.")
     setup_parser.add_argument("--skip-configure", action="store_true", help="Install MATLAB Engine only.")
-    setup_parser.add_argument("--no-skill", action="store_true", help="Do not install the SimBiology skill after MCP setup.")
+    setup_parser.add_argument("--no-skill", action="store_true", help="Do not install the synthetic biology modelling skill after MCP setup.")
     setup_parser.add_argument("--force", action="store_true", help="Replace an existing entry without prompting.")
     setup_parser.add_argument("--dry-run", action="store_true", help="Print the generated configuration without writing it.")
 

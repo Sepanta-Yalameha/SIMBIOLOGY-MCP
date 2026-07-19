@@ -1,4 +1,4 @@
-"""Print or install the packaged SimBiology skill markdown.
+"""Print or install the packaged synthetic biology modelling skill markdown.
 
 With no flags this launches interactive pickers (arrow keys) to choose the
 agent and install scope. Flags (`--client`, `--project`, `--user`,
@@ -15,7 +15,7 @@ from . import tui
 
 # Directory name the skill is installed under. Matches the `name` in SKILL.md's
 # frontmatter so the folder and the agent's skill invocation stay consistent.
-SKILL_DIR_NAME = "simbiology-workflow"
+SKILL_DIR_NAME = "synthetic-biology-modelling"
 
 # Where each client auto-discovers skills, per scope. The user-scope path is
 # resolved against the home directory and the project-scope path against the
@@ -115,7 +115,7 @@ def _select_client(*, read_key=None, stream=None) -> str | None:
     """Show the arrow-key agent menu; return the chosen client key or None."""
 
     labels = [_CLIENT_LABELS[k] for k in _CLIENT_ORDER]
-    title = "Install the SimBiology skill for which agent?  (up/down to move, Enter to select, q to cancel)"
+    title = "Install the synthetic biology modelling skill for which agent?  (up/down to move, Enter to select, q to cancel)"
     choice = tui.select(title, labels, read_key=read_key, stream=stream)
     return None if choice is None else _CLIENT_ORDER[choice]
 
@@ -161,7 +161,7 @@ def interactive_install_after_configure(client: str, scope: str) -> None:
         "Somewhere else",
         "Cancel",
     ]
-    choice = tui.select("Install the SimBiology skill?", labels)
+    choice = tui.select("Install the synthetic biology modelling skill?", labels)
     if choice == 0:
         _install_for_client(client, scope)
     elif choice == 2:
@@ -209,7 +209,7 @@ def interactive_install(*, client: str | None = None, scope: str | None = None, 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="simbiology-mcp get-skill",
-        description="Install or print the packaged SimBiology workflow skill (SKILL.md). With no flags, pick an agent and scope interactively.",
+        description="Install or print the packaged synthetic biology modelling skill (SKILL.md). With no flags, pick an agent and scope interactively.",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")

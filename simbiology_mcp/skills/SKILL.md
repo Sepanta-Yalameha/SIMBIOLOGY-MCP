@@ -1,11 +1,11 @@
 ---
-name: simbiology-workflow
-description: Use when building, modifying, simulating, exporting, or analyzing MATLAB SimBiology models through the SimBiology MCP. Covers project setup, species, parameters, reactions, doses, variants, simulation defaults, export, analysis, and use of PubMed and iGEM tools to ground model constants in real biology.
+name: synthetic-biology-modelling
+description: Use when building, modifying, simulating, exporting, or analysing synthetic biology and genetic-circuit models through the SimBiology MCP.
 ---
 
-# SimBiology Workflow
+# Synthetic Biology Modelling
 
-Use this skill when the user wants to model or simulate a genetic circuit, synthetic biology system, PK/PD system, or related biochemical network through the SimBiology MCP.
+Use this skill when the user wants to model or simulate a genetic circuit, engineered biological system, biosensor, or related synthetic biology network through the SimBiology MCP.
 
 The SimBiology MCP provides tools to:
 
