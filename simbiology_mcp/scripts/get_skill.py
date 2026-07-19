@@ -28,6 +28,7 @@ _CLIENT_SKILL_DIRS: dict[str, dict[str, Path]] = {
     "windsurf": {"user": Path(".codeium") / "windsurf" / "skills", "project": Path(".windsurf") / "skills"},
     "copilot": {"user": Path(".copilot") / "skills", "project": Path(".github") / "skills"},
 }
+_CLIENT_ALIASES = {"copilot-cli": "copilot", "vscode": "copilot"}
 
 # Menu order and human-readable labels for the interactive picker.
 _CLIENT_ORDER = ["claude-code", "cursor", "codex", "windsurf", "copilot"]
@@ -36,8 +37,16 @@ _CLIENT_LABELS = {
     "cursor": "Cursor",
     "codex": "Codex",
     "windsurf": "Windsurf",
-    "copilot": "GitHub Copilot",
+    "copilot": "GitHub Copilot (VS Code & CLI)",
 }
+
+
+def client_names() -> tuple[str, ...]:
+    return tuple([*_CLIENT_ORDER, *_CLIENT_ALIASES])
+
+
+def _canonical_client(client: str) -> str:
+    return _CLIENT_ALIASES.get(client, client)
 
 
 def _packaged_skill_path() -> Path:
@@ -63,6 +72,7 @@ def _project_root() -> Path:
 def _client_target(client: str, scope: str) -> Path:
     """Resolve the SKILL.md destination for a known client and scope."""
 
+    client = _canonical_client(client)
     try:
         base_rel = _CLIENT_SKILL_DIRS[client][scope]
     except KeyError:
@@ -136,8 +146,28 @@ def _select_install_target(*, client: str, scope: str | None = None, read_key=No
 
 
 def _install_for_client(client: str, scope: str) -> None:
+    client = _canonical_client(client)
     _, target = _write_skill(_client_target(client, scope))
     print(f"Installed {_CLIENT_LABELS[client]} skill to {target}")
+
+
+def interactive_install_after_configure(client: str, scope: str) -> None:
+    """Offer the configured client and scope before opening the full picker."""
+
+    client = _canonical_client(client)
+    labels = [
+        f"Install skill here - {_client_target(client, scope)}",
+        "No",
+        "Somewhere else",
+        "Cancel",
+    ]
+    choice = tui.select("Install the SimBiology skill?", labels)
+    if choice == 0:
+        _install_for_client(client, scope)
+    elif choice == 2:
+        interactive_install(fallback="hint")
+    elif choice == 3 or choice is None:
+        print("Skill installation cancelled.")
 
 
 def interactive_install(*, client: str | None = None, scope: str | None = None, fallback: str = "print") -> None:
@@ -183,7 +213,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--print", action="store_true", dest="print_skill", help="Print SKILL.md to stdout.")
-    mode.add_argument("--client", choices=sorted(_CLIENT_SKILL_DIRS), default=None, help="Install directly for a client. Combine with --user or --project to choose scope.")
+    mode.add_argument("--client", choices=sorted(client_names()), default=None, help="Install directly for a client. Combine with --user or --project to choose scope.")
     mode.add_argument("--install-path", help="Install directly to an explicit path.")
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--user", action="store_true", help="Install into the user-level skills directory (default).")

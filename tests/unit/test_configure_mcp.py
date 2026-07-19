@@ -261,9 +261,16 @@ def test_copilot_cli_config_path_is_under_copilot_home(monkeypatch, tmp_path: Pa
     assert configure_mcp._path_for_client("copilot-cli", "user") == tmp_path / ".copilot" / "mcp-config.json"
 
 
-def test_configure_copilot_cli_writes_local_server(monkeypatch, capsys, tmp_path: Path) -> None:
+def test_copilot_cli_project_config_is_under_github(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(configure_mcp, "_project_root", lambda: tmp_path)
+
+    assert configure_mcp.supported_scopes("copilot-cli") == ("user", "project")
+    assert configure_mcp._path_for_client("copilot-cli", "project") == tmp_path / ".github" / "mcp.json"
+
+
+def test_configure_copilot_cli_writes_stdio_server(monkeypatch, capsys, tmp_path: Path) -> None:
     # Copilot CLI stores MCP servers in ~/.copilot/mcp-config.json under an
-    # `mcpServers` root, with `type: "local"`. Writing that file directly works
+    # `mcpServers` root, with `type: "stdio"`. Writing that file directly works
     # whether or not the standalone @github/copilot CLI is installed, unlike
     # shelling out to `copilot mcp add`, which cannot be trusted on a machine
     # that only has the VS Code bootstrapper shim.
@@ -280,7 +287,7 @@ def test_configure_copilot_cli_writes_local_server(monkeypatch, capsys, tmp_path
     assert json.loads(target.read_text(encoding="utf-8")) == {
         "mcpServers": {
             "simbiology": {
-                "type": "local",
+                "type": "stdio",
                 "command": r"C:\repo\.venv\Scripts\simbiology-mcp.exe",
                 "args": ["start"],
             }
@@ -290,6 +297,21 @@ def test_configure_copilot_cli_writes_local_server(monkeypatch, capsys, tmp_path
     # A re-run finds the identical entry and is a no-op success, not an error.
     configure_mcp.configure_client("copilot-cli", scope="user", dry_run=False)
     assert "already configured for GitHub Copilot CLI (user scope)." in capsys.readouterr().out
+
+
+def test_configure_copilot_cli_project_writes_stdio_server(monkeypatch, tmp_path: Path) -> None:
+    target = tmp_path / ".github" / "mcp.json"
+    monkeypatch.setattr(configure_mcp, "_path_for_client", lambda client, scope: target)
+    monkeypatch.setattr(configure_mcp, "resolve_server_launch", lambda: ("simbiology-mcp", ["start"]))
+    monkeypatch.setattr(configure_mcp, "_is_interactive", lambda: False)
+
+    configure_mcp.configure_client("copilot-cli", scope="project", dry_run=False)
+
+    assert json.loads(target.read_text(encoding="utf-8"))["mcpServers"]["simbiology"] == {
+        "type": "stdio",
+        "command": "simbiology-mcp",
+        "args": ["start"],
+    }
 
 
 def _record_native(monkeypatch, *, fail_add_with: str | None = None) -> list[list[str]]:
