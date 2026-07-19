@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import configure_mcp, tui
+from . import configure_mcp, get_skill, tui
 
 
 def find_matlab_installs_windows():
@@ -148,14 +148,19 @@ def main(argv: list[str] | None = None):
     scope_name = "project" if args.project else "user"
     if args.client is not None:
         configure_mcp.configure_client(args.client, scope=scope_name, force=args.force, dry_run=args.dry_run)
+        if not args.dry_run:
+            get_skill._install_for_client(args.client, scope_name)
         return
 
+    preferred_scope = "project" if args.project else "user" if args.user else None
     configure_mcp.interactive_configure(
-        preferred_scope="project" if args.project else None,
+        preferred_scope=preferred_scope,
         force=args.force,
         dry_run=args.dry_run,
         noninteractive_fallback="hint",
     )
+    if not args.dry_run:
+        get_skill.interactive_install(scope=preferred_scope, fallback="hint")
 
 
 if __name__ == "__main__":

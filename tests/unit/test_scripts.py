@@ -503,12 +503,15 @@ def test_setup_main_runs_uv_and_engine_install(monkeypatch, tmp_path: Path, caps
         return Result(0)
 
     config_calls: list[dict] = []
+    skill_calls: list[dict] = []
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root)])
     monkeypatch.setattr(setup.shutil, "which", lambda name: "uv" if name == "uv" else None)
     monkeypatch.setattr(setup.subprocess, "run", fake_run)
     monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
     monkeypatch.setattr(setup, "configure_mcp", configure_mcp)
+    monkeypatch.setattr(setup, "get_skill", get_skill)
     monkeypatch.setattr(configure_mcp, "interactive_configure", lambda **kwargs: config_calls.append(kwargs))
+    monkeypatch.setattr(get_skill, "interactive_install", lambda **kwargs: skill_calls.append(kwargs))
 
     setup.main()
 
@@ -521,6 +524,7 @@ def test_setup_main_runs_uv_and_engine_install(monkeypatch, tmp_path: Path, caps
     assert calls[1][1] == engine_dir
     assert "matlabengine installed successfully." in capsys.readouterr().out
     assert config_calls == [{"preferred_scope": None, "force": False, "dry_run": False, "noninteractive_fallback": "hint"}]
+    assert skill_calls == [{"scope": None, "fallback": "hint"}]
 
 
 def test_setup_main_can_skip_configuration(monkeypatch, tmp_path: Path) -> None:
@@ -539,17 +543,46 @@ def test_setup_main_can_skip_configuration(monkeypatch, tmp_path: Path) -> None:
         return Result(0)
 
     config_calls: list[dict] = []
+    skill_calls: list[dict] = []
     monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root), "--skip-configure"])
     monkeypatch.setattr(setup.shutil, "which", lambda name: "uv" if name == "uv" else None)
     monkeypatch.setattr(setup.subprocess, "run", fake_run)
     monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
     monkeypatch.setattr(setup, "configure_mcp", configure_mcp)
+    monkeypatch.setattr(setup, "get_skill", get_skill)
     monkeypatch.setattr(configure_mcp, "interactive_configure", lambda **kwargs: config_calls.append(kwargs))
+    monkeypatch.setattr(get_skill, "interactive_install", lambda **kwargs: skill_calls.append(kwargs))
 
     setup.main()
 
     assert calls[1][1] == engine_dir
     assert config_calls == []
+    assert skill_calls == []
+
+
+def test_setup_main_installs_skill_for_explicit_client(monkeypatch, tmp_path: Path) -> None:
+    matlab_root = tmp_path / "MATLAB" / "R2025a"
+    engine_dir = matlab_root / "extern" / "engines" / "python"
+    engine_dir.mkdir(parents=True)
+
+    class Result:
+        returncode = 0
+
+    config_calls: list[dict] = []
+    skill_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr("sys.argv", ["simbiology-mcp-setup", "--matlab-root", str(matlab_root), "--client", "codex", "--project"])
+    monkeypatch.setattr(setup.shutil, "which", lambda name: "uv" if name == "uv" else None)
+    monkeypatch.setattr(setup.subprocess, "run", lambda *args, **kwargs: Result())
+    monkeypatch.setattr(setup.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    monkeypatch.setattr(setup, "configure_mcp", configure_mcp)
+    monkeypatch.setattr(setup, "get_skill", get_skill)
+    monkeypatch.setattr(configure_mcp, "configure_client", lambda client, **kwargs: config_calls.append({"client": client, **kwargs}))
+    monkeypatch.setattr(get_skill, "_install_for_client", lambda client, scope: skill_calls.append((client, scope)))
+
+    setup.main()
+
+    assert config_calls == [{"client": "codex", "scope": "project", "force": False, "dry_run": False}]
+    assert skill_calls == [("codex", "project")]
 
 
 def test_setup_main_exits_when_engine_dir_missing(monkeypatch, tmp_path: Path) -> None:
