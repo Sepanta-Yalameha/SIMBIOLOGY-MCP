@@ -20,6 +20,13 @@ def test_skill_path_uses_packaged_copy(monkeypatch, tmp_path: Path) -> None:
     assert get_skill._skill_path() == packaged
 
 
+def test_packaged_skill_is_scoped_to_synthetic_biology() -> None:
+    text = get_skill._skill_text()
+
+    assert get_skill.SKILL_DIR_NAME == "synthetic-biology-modelling"
+    assert "name: synthetic-biology-modelling" in text
+
+
 def test_write_skill_copies_skill_markdown(monkeypatch, tmp_path: Path) -> None:
     target = tmp_path / "skills" / "SKILL.md"
 
@@ -117,7 +124,7 @@ def test_client_target_resolves_per_client_and_scope(monkeypatch, tmp_path: Path
         ("copilot", "project"): ".github/skills",
     }
     for (client, scope), rel in cases.items():
-        expected = tmp_path.joinpath(*rel.split("/"), "simbiology-workflow", "SKILL.md")
+        expected = tmp_path.joinpath(*rel.split("/"), "synthetic-biology-modelling", "SKILL.md")
         assert get_skill._client_target(client, scope) == expected
 
 
@@ -129,7 +136,7 @@ def test_client_target_rejects_unknown_client() -> None:
 def test_copilot_client_aliases_share_the_copilot_skill_path(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path)
 
-    expected = tmp_path / ".github" / "skills" / "simbiology-workflow" / "SKILL.md"
+    expected = tmp_path / ".github" / "skills" / "synthetic-biology-modelling" / "SKILL.md"
     assert get_skill._client_target("copilot-cli", "project") == expected
     assert get_skill._client_target("vscode", "project") == expected
 
@@ -140,7 +147,7 @@ def test_get_skill_install_user_scope(monkeypatch, capsys, tmp_path: Path) -> No
 
     get_skill.main()
 
-    target = tmp_path / ".claude" / "skills" / "simbiology-workflow" / "SKILL.md"
+    target = tmp_path / ".claude" / "skills" / "synthetic-biology-modelling" / "SKILL.md"
     assert target.read_text(encoding="utf-8") == get_skill._skill_text()
     assert f"Installed Claude Code skill to {target.resolve()}" in capsys.readouterr().out
 
@@ -151,7 +158,7 @@ def test_get_skill_install_project_scope(monkeypatch, tmp_path: Path) -> None:
 
     get_skill.main()
 
-    assert (tmp_path / ".cursor" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
+    assert (tmp_path / ".cursor" / "skills" / "synthetic-biology-modelling" / "SKILL.md").exists()
 
 
 @pytest.mark.parametrize("scope_flag", ["--project", "--user"])
@@ -172,7 +179,7 @@ def test_get_skill_install_without_client_prompts_when_interactive(monkeypatch, 
 
     get_skill.main()
 
-    assert (tmp_path / ".agents" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
+    assert (tmp_path / ".agents" / "skills" / "synthetic-biology-modelling" / "SKILL.md").exists()
 
 
 def test_get_skill_install_without_client_errors_when_not_interactive(monkeypatch, tmp_path: Path) -> None:
@@ -223,7 +230,7 @@ def test_select_client_wraps_up_and_cancels() -> None:
 
 def test_scope_label_shows_install_paths(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(get_skill, "_project_root", lambda: tmp_path / "repo")
-    target = tmp_path / "repo" / ".agents" / "skills" / "simbiology-workflow" / "SKILL.md"
+    target = tmp_path / "repo" / ".agents" / "skills" / "synthetic-biology-modelling" / "SKILL.md"
 
     assert get_skill._scope_label("codex", "project") == f"Project - {target}"
 
@@ -236,7 +243,7 @@ def test_select_install_target_uses_selected_scope(monkeypatch, tmp_path: Path) 
 
     target = get_skill._select_install_target(client="codex", read_key=_fake_keys(["down", "enter"]), stream=io.StringIO())
 
-    assert target == tmp_path / "repo" / ".agents" / "skills" / "simbiology-workflow" / "SKILL.md"
+    assert target == tmp_path / "repo" / ".agents" / "skills" / "synthetic-biology-modelling" / "SKILL.md"
 
 
 def test_select_install_target_accepts_custom_path(tmp_path: Path) -> None:
@@ -278,7 +285,7 @@ def test_interactive_install_writes_selected_client(monkeypatch, capsys, tmp_pat
 
     get_skill.interactive_install(scope="user")
 
-    assert (tmp_path / ".codeium" / "windsurf" / "skills" / "simbiology-workflow" / "SKILL.md").exists()
+    assert (tmp_path / ".codeium" / "windsurf" / "skills" / "synthetic-biology-modelling" / "SKILL.md").exists()
     assert "Installed" in capsys.readouterr().out
 
 
@@ -547,7 +554,7 @@ def test_setup_main_runs_uv_and_engine_install(monkeypatch, tmp_path: Path, caps
     )
     assert calls[1][0][0:3] == [setup.sys.executable, "setup.py", "build"]
     assert calls[1][1] == engine_dir
-    assert "matlabengine installed successfully." in capsys.readouterr().out
+    assert "MATLAB Engine installed successfully." in capsys.readouterr().out
     assert config_calls == [{"preferred_scope": None, "force": False, "dry_run": False, "noninteractive_fallback": "hint"}]
 
 
