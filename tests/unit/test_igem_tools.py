@@ -32,8 +32,52 @@ def test_igem_client_failure_is_reported_gracefully(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(igem, "Client", FakeClient)
     igem._client.cache_clear()
 
-    with pytest.raises(igem.IgemUnavailableError, match="iGEM tools are currently unavailable"):
+    with pytest.raises(igem.IgemUnavailableError, match="Could not connect to the iGEM registry"):
         igem.part("BBa_J23100")
+
+
+def test_health_status_tolerates_unknown_components() -> None:
+    """A health component the client has never heard of must not break parsing.
+
+    The registry gains components over time: adding `valkey` was enough to fail
+    every connect() while the registry itself reported "ok", because the client
+    ships these models with extra="forbid". The payload below is the real
+    response that broke it.
+    """
+    from igem_registry_api.client import HealthStatus
+
+    igem._relax_response_models()
+
+    component = {"database": {"status": "up"}, "memory_rss": {"status": "up"}, "valkey": {"status": "up"}}
+    parsed = HealthStatus.model_validate({"status": "ok", "info": component, "error": {}, "details": component})
+
+    assert parsed.status == "ok"
+
+
+def test_relax_stays_inside_the_registry_client() -> None:
+    """The sweep must not escape igem_registry_api into pydantic itself.
+
+    The client imports pydantic's base classes into its own namespace, so
+    selecting models by shape alone also caught BaseModel and RootModel.
+    Relaxing those reaches every model in the process rather than this client's:
+    unrelated models start retaining unknown fields, and RootModel refuses the
+    change outright, so any RootModel subclass built afterwards raises
+    PydanticUserError.
+    """
+    from pydantic import BaseModel, RootModel
+
+    igem._relax_response_models()
+
+    class Unrelated(BaseModel):
+        kept: int
+
+    # Stock pydantic drops an unknown field; a leaked extra="allow" would keep it.
+    assert Unrelated.model_validate({"kept": 1, "unknown": 2}).model_dump() == {"kept": 1}
+
+    class Rooted(RootModel[int]):
+        pass
+
+    assert Rooted.model_validate(3).root == 3
 
 
 def test_igem_part_fetches_by_slug(monkeypatch: pytest.MonkeyPatch) -> None:
