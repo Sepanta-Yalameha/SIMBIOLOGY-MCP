@@ -8,6 +8,10 @@ version = "0.1.0"
 description = "Model Context Protocol server for MATLAB SimBiology: build, modify, simulate, and export systems-biology models from AI agents."
 readme = "README.md"
 requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
 authors = [{ name = "Yojith Sai Biradavolu", email = "yojith23@gmail.com" },
            { name = "Sepanta Yalameha", email = "sepantayalameha2006@gmail.com" }]
 keywords = ["mcp", "simbiology", "matlab", "systems-biology", "pk-pd", "modeling"]
