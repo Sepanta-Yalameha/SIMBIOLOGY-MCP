@@ -31,7 +31,7 @@ This MCP server provides a structured programmatic layer that:
 
 ## Installation
 
-Three installation paths are supported.
+Choose one way to install the Python package, then complete the common setup steps below.
 
 ### 1. Manual repo checkout
 
@@ -57,20 +57,6 @@ source .venv/bin/activate
 
 ```shell
 python -m pip install -e .
-simbiology-mcp setup
-```
-
-Then point your MCP client at the repo entry point. This is the Windows form; on macOS or Linux, use the absolute path to `.venv/bin/python` instead.
-
-```json
-{
-  "mcpServers": {
-    "simbiology": {
-      "command": "C:/absolute/path/to/SIMBIOLOGY-MCP/.venv/Scripts/python.exe",
-      "args": ["-m", "simbiology_mcp", "start"]
-    }
-  }
-}
 ```
 
 ### 2. Recommended: `uv tool install`
@@ -79,35 +65,6 @@ Use this when you want a cleaner install without cloning the repo.
 
 ```powershell
 uv tool install simbiology-mcp
-simbiology-mcp setup
-```
-
-Then point your MCP client at the installed `simbiology-mcp` command with the `start` subcommand (see [Wiring into an MCP client](#wiring-into-an-mcp-client)).
-
-`simbiology-mcp setup` installs MATLAB Engine for Python and can optionally configure an MCP client in the same run. Use `simbiology-mcp configure` when you only want to write client configuration.
-
-To install the MATLAB Engine, configure a client, and install its matching skill in one command:
-
-```powershell
-simbiology-mcp setup --client copilot-cli --project
-```
-
-Without `--client`, `setup` walks through the same choices interactively after the MATLAB Engine installation. Add `--no-skill` to omit the matching skill.
-
-The skill installer stays separate:
-
-```powershell
-simbiology-mcp get-skill
-```
-
-To skip the menu, name the agent (the target directory is created if missing):
-
-```powershell
-simbiology-mcp get-skill --client claude-code          # ~/.claude/skills/...
-simbiology-mcp get-skill --client cursor --project     # ./.cursor/skills/...
-simbiology-mcp get-skill --client copilot-cli --project # ./.github/skills/...
-simbiology-mcp get-skill --install-path C:\path\to\SKILL.md  # exact path
-simbiology-mcp get-skill --print                       # print SKILL.md to stdout instead
 ```
 
 ### 3. Plain `pip`
@@ -116,14 +73,31 @@ Use this if you do not want `uv tool install`.
 
 ```powershell
 python -m pip install simbiology-mcp
+```
+
+## Complete the setup
+
+The easiest option is the interactive setup. It installs the MATLAB Engine, configures an MCP client, and offers to install the matching skill:
+
+```powershell
 simbiology-mcp setup
 ```
 
-`setup` installs MATLAB Engine for Python. Add `--client`, `--user`, or `--project` if you also want it to write client configuration, or run `simbiology-mcp configure` later.
+For a fully interactive setup, follow the prompts to choose your MATLAB installation, client, configuration scope, and skill destination.
 
-### Configure an MCP client
+For headless or engine-only setup, install the MATLAB Engine for Python from your local MATLAB installation:
 
-Use `simbiology-mcp configure` to write the MCP server entry for a specific client:
+```powershell
+simbiology-mcp setup --skip-configure
+```
+
+If multiple MATLAB installations are found, select one interactively or pass an index:
+
+```powershell
+simbiology-mcp setup --matlab-index 0 --skip-configure
+```
+
+Configure an MCP client:
 
 ```powershell
 simbiology-mcp configure --client cursor
@@ -131,19 +105,17 @@ simbiology-mcp configure --client codex --project
 simbiology-mcp configure --list-clients
 ```
 
-The configuration helper supports Claude Code, Cursor, Codex, Windsurf, GitHub Copilot CLI, and Visual Studio Code/GitHub Copilot. `--list-clients` shows the user and project scopes available for each client. Existing matching entries are left unchanged; use `--force` to replace a different existing entry.
+The configuration helper supports Claude Code, Cursor, Codex, Windsurf, GitHub Copilot CLI, and Visual Studio Code/GitHub Copilot. The user scope is the default; use `--project` for project-local configuration. Existing matching entries are left unchanged; use `--force` to replace a different existing entry.
 
-If the installed `simbiology-mcp` command is available, configuration points clients at that executable. Otherwise it falls back to `python -m simbiology_mcp start`.
-
-### Get the synthetic biology modelling skill
-
-The synthetic biology modelling skill installer stays separate from MCP configuration:
+Install the synthetic biology modelling skill separately:
 
 ```powershell
-simbiology-mcp get-skill
+simbiology-mcp get-skill --client codex
 ```
 
-Use `--client`, `--project`, `--user`, or `--install-path` to choose a destination directly.
+Use `--client`, `--project`, `--user`, or `--install-path` to choose a destination directly. Run `simbiology-mcp get-skill` without flags for the interactive picker.
+
+Add `--no-skill` to omit the skill installation.
 
 ---
 
@@ -159,29 +131,29 @@ Use `--client`, `--project`, `--user`, or `--install-path` to choose a destinati
 
 ## Usage
 
-Start the server over stdio, either through the repo entry point or the installed command:
+Once setup has configured the MCP server for your chosen agent, launch or restart that agent's client session. The client starts the server automatically when it connects to it; you do not need to run `start` manually.
 
-```shell
-# from an activated repo virtual environment
-python -m simbiology_mcp start
+### Manual configuration and server start
 
-# or, after installation
-simbiology-mcp start
-```
+Use manual configuration only when your client is not supported by `configure`:
 
-### Wiring into an MCP client
-
-Point your MCP client at the server command. A typical stdio configuration for an installed command:
+Point your MCP client at the installed server executable. Use the absolute path so the client does not depend on your shell's `PATH`:
 
 ```json
 {
   "mcpServers": {
     "simbiology": {
-      "command": "simbiology-mcp",
+      "command": "C:/absolute/path/to/simbiology-mcp.exe",
       "args": ["start"]
     }
   }
 }
+```
+
+Alternatively, run the server directly from an activated repository environment:
+
+```powershell
+python -m simbiology_mcp start
 ```
 
 The MATLAB engine starts lazily on the first tool call that needs it, so client startup stays fast.
