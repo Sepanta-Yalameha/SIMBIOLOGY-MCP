@@ -182,7 +182,9 @@ The server exposes the following MCP tools:
 | `export_graph`, `export_csv` | Export the same run used by `simulate_model` to PNG or CSV. | Optional path plus optional `species`, `doses`, and `variants`. | File metadata or inline CSV text. |
 | `list_series`, `steady_state`, `series_min`, `series_max` | Analyze exported CSV data without rerunning MATLAB. | CSV path and target series name. | Series names or computed values. |
 | `pubmed_search`, `pubmed_summary`, `pubmed_article` | Pull literature context from PubMed. | Query, PubMed ID, and summary options. | Search hits, article details, or summaries. |
+| `pubmed_fulltext` | Fetch open-access full text (section-labeled) for a PubMed article from PubMed Central. | PubMed ID, optional section filter, reference toggle, and character cap. | Section-labeled full text, or the abstract when the paper is not open access. |
 | `igem_part`, `igem_search`, `igem_search_best` | Look up parts from the iGEM registry. | Exact identifier or free-text query. | Part records or ranked matches. |
+| `sabio_search`, `sabio_entry` | Look up measured enzyme kinetics (Km, kcat, Vmax, Ki) from SABIO-RK. | Fielded query or filters (organism, substrate, EC number, parameter type), or an entry id. | Slimmed kinetics entries with as-reported and SI-normalized values plus source publication. |
 
 ---
 
