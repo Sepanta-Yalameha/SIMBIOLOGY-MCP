@@ -135,6 +135,15 @@ After simulation:
 
 Use analysis tools first when available because they reduce token waste and keep analysis reproducible.
 
+### Plotting multiple things on one graph
+
+Both `export_graph` and `export_csv` cover two distinct shapes:
+
+- To draw **multiple proteins from a single run** on one graph, pass them all in `species` (for example `species=["GFP", "RFP", "mCherry"]`). A single run plots every listed species as its own labelled line with a legend. This is also the default when you list several species for a CSV.
+- To **overlay multiple scenarios** (for example wild-type vs knockout, or GFP at low/medium/high arsenic), pass `runs`: a list of `{label, variants, doses, species}` dicts, one entry per scenario. Each run carries its own variants, doses, and (optional) species readout; the top-level `species` is the default readout for any run that omits its own. The labels become the legend entries (graph) and the column names (CSV), so give each run a clear, unique label. For a CSV overlay the runs are aligned onto one shared time grid (`output_points` samples) so the file has a single time column plus one data column per run.
+
+Never write MATLAB, Python, or any other script to build a plot or a CSV yourself. Always use `export_graph` and `export_csv`, including their `runs` parameter for multi-scenario overlays. If a plot shape the user wants genuinely cannot be expressed through these tools, say so plainly instead of scripting your own workaround.
+
 ## Common Reaction Types
 
 Use these patterns whenever they match the biology. If the biology requires something else, identify the correct reaction and rate law explicitly.
@@ -237,7 +246,7 @@ The MCP exposes the following tool groups:
 | `get_simulation_settings`, `configure_simulation`, `simulate_model` | Inspect, configure, and run simulations. | Solver/settings fields, optional `species`, `doses`, `variants`, and output limits. | Current settings or simulation result rows. |
 | `create_dose`, `modify_dose`, `remove_dose`, `list_doses` | Manage repeat and schedule doses. | Dose type, target, timing, amount/rate fields. | Confirmation or dose data. |
 | `create_variant`, `modify_variant`, `remove_variant`, `list_variants` | Manage named model overrides. | Variant name and full content entries. | Confirmation or variant data. |
-| `export_graph`, `export_csv` | Export the same run used by `simulate_model` to PNG or CSV. | Optional path plus optional `species`, `doses`, and `variants`. | File metadata or inline CSV text. |
+| `export_graph`, `export_csv` | Export the same run used by `simulate_model` to PNG or CSV, or overlay several runs on one graph/CSV. | Optional path plus optional `species`, `doses`, and `variants`, plus an optional `runs` list (one `{label, variants, doses, species}` per overlaid scenario). | File metadata or inline CSV text. |
 | `list_series`, `steady_state`, `series_min`, `series_max` | Analyze exported CSV data without rerunning MATLAB. | CSV path and target series name. | Series names or computed values. |
 | `pubmed_search`, `pubmed_summary`, `pubmed_article` | Pull literature context from PubMed. | Query, PubMed ID, and summary options. | Search hits, article details, or summaries. |
 | `igem_part`, `igem_search`, `igem_search_best` | Look up parts from the iGEM registry. | Exact identifier or free-text query. | Part records or ranked matches. |

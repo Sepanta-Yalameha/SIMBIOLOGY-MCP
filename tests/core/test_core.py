@@ -381,6 +381,67 @@ def test_export_csv_matches_simulate(simulatable_project):
     assert rows[-1][1] < rows[0][1]  # A decays over the run
 
 
+def test_export_overlay_plot_writes_png(simulatable_project, tmp_path):
+    # two runs (base vs a variant that speeds decay) overlaid on one figure
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    svc.execute(m.add_variant_cmd("fast", [{"type": "parameter", "name": "k1", "property": "Value", "value": 5.0}]))
+    out = tmp_path / "overlay.png"
+    result = m.export_overlay_plot(
+        str(out),
+        runs=[{"label": "base"}, {"label": "fast", "variants": ["fast"]}],
+        species=["A"],
+    )
+    assert result["path"] == str(out)
+    assert result["runs"] == ["base", "fast"]  # one species per run -> labels are the run labels
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_export_overlay_plot_same_species_two_lines(simulatable_project, tmp_path):
+    # both runs plot A and B: sbioplot accepts the array (same states), 4 lines, run-major labels
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    svc.execute(m.add_variant_cmd("fast", [{"type": "parameter", "name": "k1", "property": "Value", "value": 5.0}]))
+    out = tmp_path / "twospecies.png"
+    result = m.export_overlay_plot(
+        str(out),
+        runs=[{"label": "base"}, {"label": "fast", "variants": ["fast"]}],
+        species=["A", "B"],
+    )
+    assert result["runs"] == ["base: A", "base: B", "fast: A", "fast: B"]
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_export_overlay_csv_shares_one_time_column(simulatable_project):
+    # two runs land on one shared grid: exactly one time column plus one per run
+    from simbiology_mcp.tools import sbio_tools
+
+    svc = _loaded(simulatable_project)
+    m = svc.get_model()
+    svc.execute(m.set_configset_cmd(stop_time=10))
+    svc.execute(m.add_variant_cmd("fast", [{"type": "parameter", "name": "k1", "property": "Value", "value": 5.0}]))
+    sbio_tools._service = svc
+    out = Path(simulatable_project).with_name("overlay_export.csv")
+    try:
+        meta = sbio_tools.export_csv(
+            path=str(out),
+            species=["A"],
+            runs=[{"label": "base"}, {"label": "fast", "variants": ["fast"]}],
+            output_points=25,
+        )
+        text = out.read_text()
+    finally:
+        sbio_tools._service = None
+        out.unlink(missing_ok=True)
+    header, rows = _parse_csv(text)
+    assert header == ["time", "base", "fast"]  # single time column, one column per run
+    assert meta["rows"] == 25 and len(rows) == 25
+    # the faster-decay run sits below the base run at the final time
+    assert rows[-1][2] < rows[-1][1]
+
+
 def test_export_csv_honors_dose(simulatable_project):
     from simbiology_mcp.tools import sbio_tools
 
