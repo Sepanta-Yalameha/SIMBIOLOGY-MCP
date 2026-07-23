@@ -571,6 +571,7 @@ def export_graph(
     x_label: str | None = None,
     y_label: str | None = None,
     legend_labels: list[str] | None = None,
+    runs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Simulate the model and export the plot as a PNG image.
 
@@ -579,10 +580,33 @@ def export_graph(
     reflects exactly that simulation rather than a bare re-run. Use
     ``title``/``x_label``/``y_label``/``legend_labels`` to avoid generic
     default output when the user wants a presentation-ready figure.
+
+    To draw several proteins on one graph, list them all in ``species``: a
+    single run plots each as its own labelled line. To overlay several
+    scenarios (for example wild-type vs knockout, or low/medium/high input),
+    pass ``runs``: a list of ``{"label", "variants", "doses", "species"}``
+    dicts, one line group per run. When ``runs`` is given, the top-level
+    ``doses`` and ``variants`` are ignored (each run supplies its own); only the
+    top-level ``species`` is used, as the default readout for any run that omits
+    its own. Every overlaid run must plot the same species. ``legend_labels``
+    overrides the computed labels only when its length matches the number of
+    plotted lines.
     """
 
     target = Path(path or "simbiology_plot.png")
-    return _model(model_name).export_plot(
+    model = _model(model_name)
+    if runs is not None:
+        return model.export_overlay_plot(
+            str(target),
+            runs,
+            resolution=resolution,
+            species=species,
+            title=title,
+            x_label=x_label,
+            y_label=y_label,
+            legend_labels=legend_labels,
+        )
+    return model.export_plot(
         str(target),
         resolution=resolution,
         species=species,
@@ -595,6 +619,18 @@ def export_graph(
     )
 
 
+def _write_csv(path: str, columns: list[str], rows: list[list[Any]], delimiter: str) -> None:
+    """Write a header plus data rows to ``path`` (parent directories created)."""
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, delimiter=delimiter)
+    writer.writerow(columns)
+    writer.writerows(rows)
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(buffer.getvalue(), newline="")
+
+
 @register("export_csv")
 def export_csv(
     path: str,
@@ -605,6 +641,8 @@ def export_csv(
     time_column: str = "time",
     data_columns: list[str] | None = None,
     delimiter: str = ",",
+    runs: list[dict[str, Any]] | None = None,
+    output_points: int = 200,
 ) -> dict[str, Any]:
     """Export the simulation time-course as CSV.
 
@@ -615,22 +653,41 @@ def export_csv(
     the user wants. The CSV is always written to ``path`` (parent directories
     are created) and ``{path, rows, columns}`` is returned, so a large
     time-course is never echoed inline to the agent.
+
+    To overlay several scenarios in one wide CSV, pass ``runs``: a list of
+    ``{"label", "variants", "doses", "species"}`` dicts. The runs are aligned
+    onto one shared time grid of ``output_points`` samples (adaptive solvers
+    otherwise land each run on a different grid), giving a single ``time``
+    column plus one data column per run (named by its label, or
+    ``"<label>_<species>"`` when a run plots several species). When ``runs`` is
+    given, the top-level ``doses`` and ``variants`` are ignored (each run
+    supplies its own) and ``data_columns`` is not accepted (each column is named
+    by its run label); only the top-level ``species`` is used, as the default
+    readout for any run that omits its own.
     """
 
     if len(delimiter) != 1:
         raise ValueError("delimiter must be a single character.")
-    result = _model(model_name).simulate(species=species, doses=doses, variants=variants)
+    model = _model(model_name)
+
+    if runs is not None:
+        if data_columns is not None:
+            raise ValueError("data_columns is not supported with runs; each run column is named by its label.")
+        aligned = model.simulate_overlay_grid(runs, species=species, output_points=output_points)
+        data = aligned["columns"]
+        columns = [time_column, *(name for name, _ in data)]
+        if len(set(columns)) != len(columns):
+            raise ValueError("a run label collides with the time column; rename the run or pass a different time_column.")
+        rows = [[moment, *(values[index] for _, values in data)] for index, moment in enumerate(aligned["time"])]
+        _write_csv(path, columns, rows, delimiter)
+        return {"path": str(Path(path)), "rows": len(aligned["time"]), "columns": columns, "runs": aligned["labels"]}
+
+    result = model.simulate(species=species, doses=doses, variants=variants)
     names = result["names"]
     if data_columns is not None and len(data_columns) != len(names):
         raise ValueError("data_columns must match the number of exported series.")
     columns = [time_column, *(data_columns or names)]
-    buffer = StringIO()
-    writer = csv.writer(buffer, delimiter=delimiter)
-    writer.writerow(columns)
-    for index, moment in enumerate(result["time"]):
-        writer.writerow([moment, *(result["data"][name][index] for name in names)])
-    text = buffer.getvalue()
-    target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(text, newline="")
-    return {"path": str(target), "rows": len(result["time"]), "columns": columns}
+    series = [result["data"][name] for name in names]
+    rows = [[moment, *(s[index] for s in series)] for index, moment in enumerate(result["time"])]
+    _write_csv(path, columns, rows, delimiter)
+    return {"path": str(Path(path)), "rows": len(result["time"]), "columns": columns}

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Multi-run time-series overlays for `export_graph` and `export_csv` via a new `runs` parameter. Each run is a `{label, variants, doses, species}` scenario; the graph overlays every run's line(s) with a legend, and the CSV aligns the runs onto one shared time grid (`output_points` samples) as a single time column plus one data column per run. Omitting `runs` keeps the existing single-run behaviour unchanged.
 * `pubmed_fulltext` tool: fetches section-labeled open-access full text for a PubMed article from PubMed Central (BioC API), where Methods, Results, and Tables carry kinetic constants. Falls back to the PubMed abstract with `full_text_available` False when the paper is not open access.
 * `sabio_search` and `sabio_entry` tools: look up measured enzyme kinetics (Km, kcat, Vmax, Ki) from SABIO-RK using a fielded query (Organism, Substrate, ECNumber, Parametertype) or an entry id. Each parameter carries both the as-reported unit and an SI-normalized value, and the source publication cross-references PubMed.
 

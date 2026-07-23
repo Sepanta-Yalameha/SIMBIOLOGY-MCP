@@ -125,6 +125,54 @@ def _matlab_string_cell(values: list[str]) -> str:
     return "{" + ",".join(to_matlab_string(value) for value in values) + "}"
 
 
+_RUN_KEYS = {"label", "variants", "doses", "species"}
+_MAX_OUTPUT_POINTS = 100_000
+
+
+def _validate_runs(runs: list[dict[str, Any]]) -> None:
+    """Reject an empty run list, non-dict runs, blank/duplicate labels, or unknown keys.
+
+    Labels become legend entries and CSV column keys, so they must exist and be
+    unique. Unknown keys (usually a typo such as ``variant`` for ``variants``)
+    are rejected rather than silently ignored, which would drop that scenario's
+    override. Raised before any MATLAB executes so a bad overlay request never
+    starts a simulation.
+    """
+
+    if not runs:
+        raise ValueError("runs must contain at least one run.")
+    labels: list[str] = []
+    for run in runs:
+        if not isinstance(run, dict):
+            raise ValueError("each run must be a dict with a 'label'.")
+        unknown = set(run) - _RUN_KEYS
+        if unknown:
+            raise ValueError(f"unknown run key(s) {sorted(unknown)}; allowed keys are label, variants, doses, species.")
+        label = run.get("label")
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError("each run requires a non-empty 'label'.")
+        labels.append(label)
+    if len(set(labels)) != len(labels):
+        raise ValueError("run labels must be unique.")
+
+
+def _overlay_labels(runs: list[dict[str, Any]], per_run_species: list[list[str]]) -> list[str]:
+    """Compute legend labels matching sbioplot's run-major line order.
+
+    When every run plots exactly one species, each line is a run, so the label
+    is the run label. Otherwise a run contributes one line per species, so each
+    line is labelled ``"<run label>: <species>"`` in run-major order.
+    """
+
+    if all(len(names) == 1 for names in per_run_species):
+        return [str(run["label"]) for run in runs]
+    labels: list[str] = []
+    for run, names in zip(runs, per_run_species):
+        for name in names:
+            labels.append(f"{run['label']}: {name}")
+    return labels
+
+
 def _matlab_variant_value(value: Any) -> str:
     """Format a variant content value (numeric via number, otherwise string).
 
@@ -500,6 +548,8 @@ class SbioModel:
         species: list[str] | None = None,
         doses: list[str] | None = None,
         variants: list[str] | None = None,
+        dest: str | None = None,
+        validate: bool = True,
     ) -> str:
         """Run ``sbiosimulate`` on the active configset, leaving the result in a
         MATLAB variable, and return that variable's name.
@@ -509,23 +559,104 @@ class SbioModel:
         Active flag. If ``species`` is given, the result is narrowed to those
         quantities via ``selectbyname``. Shared by :meth:`simulate` and the
         export helpers so every path simulates identically.
+
+        ``dest`` names the MATLAB variable the raw SimData lands in (a narrowed
+        result lands in ``<dest>_sel``); it defaults to ``sbio_sd`` so the
+        single-run path is unchanged. Overlay paths pass a distinct name per run
+        (``sbio_run_1``, ``sbio_run_2``, ...) so several runs can coexist in the
+        workspace and be gathered into one SimData array.
+
+        ``validate`` re-reads the model's dose/variant name lists to check the
+        requested names; overlay callers cache those lists once and pass
+        ``validate=False`` so the lists are not re-read once per run.
         """
 
-        if doses:
+        raw = dest or "sbio_sd"
+        if validate and doses:
             self._require_named("dose", self.doses(), doses)
-        if variants:
+        if validate and variants:
             self._require_named("variant", self.variants(), variants)
         if doses or variants:
             variant_array = self._name_array("getvariant", variants)
             dose_array = self._name_array("getdose", doses)
-            self._service.execute(f"sbio_sd = sbiosimulate({self.var},getconfigset({self.var})," f"{variant_array},{dose_array});")
+            self._service.execute(f"{raw} = sbiosimulate({self.var},getconfigset({self.var})," f"{variant_array},{dose_array});")
         else:
-            self._service.execute(f"sbio_sd = sbiosimulate({self.var});")
+            self._service.execute(f"{raw} = sbiosimulate({self.var});")
         if species:
             names_cell = "{" + ",".join(to_matlab_string(s) for s in species) + "}"
-            self._service.execute(f"sbio_sd_sel = selectbyname(sbio_sd,{names_cell});")
-            return "sbio_sd_sel"
-        return "sbio_sd"
+            sel = f"{raw}_sel"
+            self._service.execute(f"{sel} = selectbyname({raw},{names_cell});")
+            return sel
+        return raw
+
+    def _read_data_names(self, source: str) -> list[str]:
+        """Read a SimData variable's ``DataNames`` as a list of species strings."""
+
+        names = self._service.execute(f"{source}.DataNames", nargout=1)
+        return [names] if isinstance(names, str) else [str(name) for name in names]
+
+    def _simulate_run(
+        self,
+        run: dict[str, Any],
+        index: int,
+        default_species: list[str] | None,
+        known_doses: list[str],
+        known_variants: list[str],
+    ) -> str:
+        """Simulate one overlay ``run`` into ``sbio_run_<index>`` and return its source var.
+
+        A run without its own ``species`` falls back to ``default_species``. Requested
+        dose/variant names are validated against the pre-fetched ``known_doses`` /
+        ``known_variants``, so the model's name lists are read once for the whole overlay
+        rather than once per run.
+        """
+
+        doses = run.get("doses")
+        variants = run.get("variants")
+        if doses:
+            self._require_named("dose", known_doses, doses)
+        if variants:
+            self._require_named("variant", known_variants, variants)
+        run_species = run.get("species")
+        return self._simulate_to_workspace(
+            species=default_species if run_species is None else run_species,
+            doses=doses,
+            variants=variants,
+            dest=f"sbio_run_{index}",
+            validate=False,
+        )
+
+    def _plot_and_export(
+        self,
+        source_expr: str,
+        path: str,
+        resolution: int,
+        title: str | None,
+        x_label: str | None,
+        y_label: str | None,
+        legend_labels: list[str] | None,
+    ) -> None:
+        """``sbioplot`` a SimData expression, decorate it, export a PNG, and always close the figure.
+
+        Shared by the single-run and overlay plot paths. The figure handle is grabbed right
+        after ``sbioplot`` and the decorate-and-export block runs inside a ``try/finally`` so a
+        title/legend/export error never leaks the figure over a long MCP session.
+        """
+
+        self._service.execute(f"sbio_ax = sbioplot({source_expr});")
+        self._service.execute("sbio_fig = get(sbio_ax,'Parent');")
+        try:
+            if title is not None:
+                self._service.execute(f"title(sbio_ax,{to_matlab_string(title)});")
+            if x_label is not None:
+                self._service.execute(f"xlabel(sbio_ax,{to_matlab_string(x_label)});")
+            if y_label is not None:
+                self._service.execute(f"ylabel(sbio_ax,{to_matlab_string(y_label)});")
+            if legend_labels is not None:
+                self._service.execute(f"legend(sbio_ax,{_matlab_string_cell(legend_labels)});")
+            self._service.execute(f"exportgraphics(sbio_fig,{to_matlab_string(str(path))}," f"'Resolution',{int(resolution)});")
+        finally:
+            self._service.execute("close(sbio_fig);")
 
     def simulate(
         self,
@@ -568,24 +699,117 @@ class SbioModel:
         """
 
         source = self._simulate_to_workspace(species, doses, variants)
-        names = self._service.execute(f"{source}.DataNames", nargout=1)
-        names = [names] if isinstance(names, str) else [str(name) for name in names]
+        names = self._read_data_names(source)
         if legend_labels is not None and len(legend_labels) != len(names):
             raise ValueError("legend_labels must match the number of plotted series.")
-        self._service.execute(f"sbio_ax = sbioplot({source});")
-        if title is not None:
-            self._service.execute(f"title(sbio_ax,{to_matlab_string(title)});")
-        if x_label is not None:
-            self._service.execute(f"xlabel(sbio_ax,{to_matlab_string(x_label)});")
-        if y_label is not None:
-            self._service.execute(f"ylabel(sbio_ax,{to_matlab_string(y_label)});")
-        if legend_labels is not None:
-            self._service.execute(f"legend(sbio_ax,{_matlab_string_cell(legend_labels)});")
-        self._service.execute("sbio_fig = get(sbio_ax,'Parent');")
-        try:
-            self._service.execute(f"exportgraphics(sbio_fig,{to_matlab_string(str(path))}," f"'Resolution',{int(resolution)});")
-        finally:
-            # Always close the figure sbioplot opened: a long-lived MCP session
-            # would otherwise leak a window per export and slow MATLAB down.
-            self._service.execute("close(sbio_fig);")
+        self._plot_and_export(source, path, resolution, title, x_label, y_label, legend_labels)
         return {"path": str(path), "resolution": int(resolution)}
+
+    def export_overlay_plot(
+        self,
+        path: str,
+        runs: list[dict[str, Any]],
+        resolution: int = 300,
+        species: list[str] | None = None,
+        title: str | None = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        legend_labels: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Simulate several scenarios and overlay them on one PNG.
+
+        Each ``runs`` entry is ``{"label", "variants", "doses", "species"}``; a
+        run without its own ``species`` falls back to the top-level ``species``
+        readout. Every run lands in a distinct workspace variable so they can be
+        gathered into the ``[sbio_run_1 sbio_run_2 ...]`` array ``sbioplot``
+        overlays. ``legend_labels`` overrides the computed labels only when its
+        length matches the total number of plotted lines; otherwise the computed
+        labels win. The figure is always closed, even mid-export, so a per-run
+        leak never piles up windows.
+        """
+
+        _validate_runs(runs)
+        known_doses = self.doses() if any(run.get("doses") for run in runs) else []
+        known_variants = self.variants() if any(run.get("variants") for run in runs) else []
+        sources: list[str] = []
+        per_run_species: list[list[str]] = []
+        for index, run in enumerate(runs, start=1):
+            source = self._simulate_run(run, index, species, known_doses, known_variants)
+            sources.append(source)
+            per_run_species.append(self._read_data_names(source))
+
+        # sbioplot overlays a SimData array only when every run has the same states,
+        # so reject differing species here with a clear message rather than letting
+        # sbioplot raise its opaque "must contain the same states for all runs".
+        first_species = set(per_run_species[0])
+        if any(set(names) != first_species for names in per_run_species[1:]):
+            raise ValueError("every overlaid run must plot the same species (sbioplot requires identical states across runs); pass the same 'species' for all runs.")
+
+        labels = _overlay_labels(runs, per_run_species)  # one label per plotted line
+        if legend_labels is not None:
+            if len(legend_labels) != len(labels):
+                raise ValueError("legend_labels must match the number of plotted lines.")
+            labels = legend_labels
+
+        array = "[" + " ".join(sources) + "]"
+        self._plot_and_export(array, path, resolution, title, x_label, y_label, labels)
+        return {"path": str(path), "resolution": int(resolution), "runs": labels}
+
+    def simulate_overlay_grid(
+        self,
+        runs: list[dict[str, Any]],
+        species: list[str] | None = None,
+        output_points: int = 200,
+    ) -> dict[str, Any]:
+        """Simulate several scenarios and align them onto one shared time grid.
+
+        Adaptive solvers land each run on its own time grid, so a wide CSV needs
+        a common axis: ``grid = linspace(0, stopTime, N)'`` (a column vector) and
+        each run is ``resample``-d onto it (``resample`` mutates nothing). Returns
+        the shared ``time`` column plus one ``(column_name, values)`` per plotted
+        species: a single-species run keys on its label, a multi-species run on
+        ``"<label>_<species>"``.
+        """
+
+        _validate_runs(runs)
+        points = max(2, min(int(output_points), _MAX_OUTPUT_POINTS))
+        known_doses = self.doses() if any(run.get("doses") for run in runs) else []
+        known_variants = self.variants() if any(run.get("variants") for run in runs) else []
+        self._service.execute(f"sbio_cs = getconfigset({self.var});")
+        stop_time = self._service.execute("sbio_cs.StopTime", nargout=1)
+        if not (isinstance(stop_time, (int, float)) and math.isfinite(stop_time) and stop_time > 0):
+            raise ValueError("an overlay CSV needs a finite, positive stop time; set it with configure_simulation(stop_time=...).")
+        self._service.execute(f"sbio_grid = linspace(0,{to_matlab_number(stop_time)},{points})';")
+        time = [row[0] for row in _matrix(self._service.execute("sbio_grid", nargout=1))]
+
+        units: str | None = None
+        columns: list[tuple[str, list[float]]] = []
+        for index, run in enumerate(runs, start=1):
+            source = self._simulate_run(run, index, species, known_doses, known_variants)
+            aligned = f"sbio_run_{index}_al"
+            self._service.execute(f"{aligned} = resample({source},sbio_grid);")
+            names = self._read_data_names(aligned)
+            data_rows = _matrix(self._service.execute(f"{aligned}.Data", nargout=1))
+            if len(data_rows) != points:
+                raise ValueError(f"run {run['label']!r} aligned to {len(data_rows)} rows, expected {points}; the run may stop before the configured stop time.")
+            if units is None:
+                units = str(self._service.execute(f"{aligned}.TimeUnits", nargout=1))
+            single = len(names) == 1
+            for column, name in enumerate(names):
+                key = str(run["label"]) if single else f"{run['label']}_{name}"
+                columns.append((key, [row[column] for row in data_rows]))
+
+        # Unique labels alone do not guarantee unique column keys: a
+        # single-species run keyed on "A_B" collides with a multi-species run
+        # whose "A" label yields "A_B" for species "B". A duplicate header would
+        # silently corrupt the wide CSV downstream, so reject it here.
+        keys = [key for key, _ in columns]
+        if len(set(keys)) != len(keys):
+            raise ValueError("run label/species combination produced duplicate CSV column names.")
+
+        return {
+            "time": time,
+            "time_units": units,
+            "columns": columns,
+            "labels": [str(run["label"]) for run in runs],
+        }
