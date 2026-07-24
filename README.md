@@ -25,7 +25,7 @@ This MCP server provides a structured programmatic layer that:
 - Enables automated model construction and simulation
 - Supports agent-driven workflows for systems biology
 - Removes the need for manual MATLAB interaction
-- Supports workflows such as building PK/PD models, modifying reactions and parameters, simulating time courses, exporting results, and pulling supporting context from PubMed and iGEM
+- Supports workflows such as building PK/PD models, modifying reactions and parameters, simulating time courses, exporting results, and pulling supporting context from PubMed (including open-access full text), the iGEM registry, and SABIO-RK reaction kinetics
 
 ---
 
@@ -162,6 +162,8 @@ The MATLAB engine starts lazily on the first tool call that needs it, so client 
 
 PubMed works without a key but is rate-limited. To raise the limit, copy `.env.example` to `.env` and set `NCBI_API_KEY`.
 
+The iGEM registry and the SABIO-RK kinetics database are queried without any key.
+
 ---
 
 ## Tools
@@ -195,7 +197,7 @@ simbiology_mcp/
 ├── core/        SimBiology session, per-model reads, and command builders
 ├── engine/      Singleton MATLAB engine wrapper and error types
 ├── tools/       MCP tool definitions and the shared registry
-├── external/    PubMed and iGEM API wrappers
+├── external/    PubMed, iGEM, and SABIO-RK API wrappers
 ├── interfaces/  FastMCP server wiring
 ├── scripts/     CLI helpers like setup, configure, and get-skill
 └── skills/      Packaged skill markdown
